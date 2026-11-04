@@ -3,7 +3,7 @@
 /*
 |--------------------------------------------------------------------------
 | ALTAR SERVERS WEB SYSTEM
-| Add New Member
+| Add New Member - Supabase PostgreSQL
 | St. Francis Xavier Cathedral
 |--------------------------------------------------------------------------
 */
@@ -23,11 +23,11 @@ $firstName = '';
 $middleName = '';
 $lastName = '';
 $birthDate = '';
+$sex = '';
 $address = '';
 $contactNumber = '';
 $email = '';
 $memberStatus = 'Active';
-
 
 /*
 |--------------------------------------------------------------------------
@@ -39,16 +39,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     requireValidCSRFToken();
 
-    // Collect form data
     $firstName = trim($_POST['first_name'] ?? '');
     $middleName = trim($_POST['middle_name'] ?? '');
     $lastName = trim($_POST['last_name'] ?? '');
     $birthDate = trim($_POST['birth_date'] ?? '');
+    $sex = trim($_POST['sex'] ?? '');
     $address = trim($_POST['address'] ?? '');
     $contactNumber = trim($_POST['contact_number'] ?? '');
     $email = trim($_POST['email'] ?? '');
-    $memberStatus = $_POST['member_status'] ?? 'Active';
-
+    $memberStatus = trim($_POST['member_status'] ?? 'Active');
 
     /*
     |--------------------------------------------------------------------------
@@ -68,7 +67,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Last name is required and must not exceed 100 characters.';
     }
 
-    // Validate birth date
+    if (!in_array($sex, ['Male', 'Female'], true)) {
+        $errors[] = 'Please select a valid sex.';
+    }
+
+    $age = null;
+
     if ($birthDate !== '') {
 
         $date = DateTime::createFromFormat('!Y-m-d', $birthDate);
@@ -77,6 +81,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Please enter a valid birth date.';
         } elseif ($birthDate > date('Y-m-d')) {
             $errors[] = 'Birth date cannot be in the future.';
+        } else {
+            $today = new DateTime('today');
+            $age = $date->diff($today)->y;
         }
     }
 
@@ -98,10 +105,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Invalid member status.';
     }
 
-
     /*
     |--------------------------------------------------------------------------
-    | REGISTER MEMBER AND GENERATE PERMANENT QR TOKEN
+    | REGISTER MEMBER AND GENERATE QR TOKEN
     |--------------------------------------------------------------------------
     */
 
@@ -118,60 +124,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Generate permanent QR security token
             $qrToken = bin2hex(random_bytes(32));
 
+            // Combine names into full_name
+            $fullName = trim(
+                $firstName . ' ' .
+                ($middleName !== '' ? $middleName . ' ' : '') .
+                $lastName
+            );
 
-            // Insert member into database
+            /*
+             * PostgreSQL INSERT
+             * RETURNING id replaces lastInsertId()
+             */
+
             $stmt = $pdo->prepare("
-                INSERT INTO members (
+                INSERT INTO public.members (
                     member_code,
-                    qr_token,
-                    first_name,
-                    middle_name,
-                    last_name,
+                    full_name,
+                    sex,
+                    age,
                     birth_date,
                     address,
                     contact_number,
                     email,
-                    member_status
-                ) VALUES (
+                    status,
+                    qr_token
+                )
+                VALUES (
                     :member_code,
-                    :qr_token,
-                    :first_name,
-                    :middle_name,
-                    :last_name,
+                    :full_name,
+                    :sex,
+                    :age,
                     :birth_date,
                     :address,
                     :contact_number,
                     :email,
-                    :member_status
+                    :status,
+                    :qr_token
                 )
+                RETURNING id
             ");
 
             $stmt->execute([
                 ':member_code' => $memberCode,
-                ':qr_token' => $qrToken,
-                ':first_name' => $firstName,
-                ':middle_name' => $middleName !== '' ? $middleName : null,
-                ':last_name' => $lastName,
+                ':full_name' => $fullName,
+                ':sex' => $sex,
+                ':age' => $age,
                 ':birth_date' => $birthDate !== '' ? $birthDate : null,
                 ':address' => $address !== '' ? $address : null,
                 ':contact_number' => $contactNumber !== '' ? $contactNumber : null,
                 ':email' => $email !== '' ? $email : null,
-                ':member_status' => $memberStatus
+                ':status' => $memberStatus,
+                ':qr_token' => $qrToken
             ]);
 
-            // Get newly registered member ID
-            $newMemberId = (int) $pdo->lastInsertId();
+            $newMemberId = (int) $stmt->fetchColumn();
 
-            // Commit database transaction
             $pdo->commit();
 
-
-            /*
-             * IMPORTANT:
-             * Redirect directly to the member's permanent QR card.
-             * The saved QR token will be reused for future Mass attendance.
-             */
-
+            // Redirect to permanent QR card
             header(
                 'Location: qr_card.php?id=' .
                 $newMemberId .
@@ -188,11 +198,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             error_log('Member registration error: ' . $e->getMessage());
 
-            $errors[] = 'Unable to register member. Please try again.';
+            $errors[] = 'Unable to register member. Please check the database structure and try again.';
         }
     }
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -209,18 +218,15 @@ function addEscape($value): string
     );
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | SHARED HEADER
 |--------------------------------------------------------------------------
 */
 
-// header.php automatically includes sidebar.php.
 require_once __DIR__ . '/../includes/header.php';
 
 ?>
-
 
 <style>
 
@@ -235,7 +241,6 @@ require_once __DIR__ . '/../includes/header.php';
     color: #172C46;
     font-family: 'Inter', sans-serif;
 }
-
 
 /* PAGE HEADING */
 
@@ -269,7 +274,6 @@ require_once __DIR__ . '/../includes/header.php';
     letter-spacing: 2px;
 }
 
-
 /* FORM PANEL */
 
 .form-panel {
@@ -293,7 +297,6 @@ require_once __DIR__ . '/../includes/header.php';
 .form-section-title:not(:first-child) {
     margin-top: 28px;
 }
-
 
 /* FORM GRID */
 
@@ -359,8 +362,7 @@ require_once __DIR__ . '/../includes/header.php';
     font-size: 10px;
 }
 
-
-/* PERMANENT QR NOTICE */
+/* QR NOTICE */
 
 .qr-notice {
     display: flex;
@@ -399,7 +401,6 @@ require_once __DIR__ . '/../includes/header.php';
     line-height: 1.7;
 }
 
-
 /* ERROR BOX */
 
 .error-box {
@@ -412,7 +413,6 @@ require_once __DIR__ . '/../includes/header.php';
     font-size: 12px;
     line-height: 1.8;
 }
-
 
 /* FORM BUTTONS */
 
@@ -460,7 +460,6 @@ require_once __DIR__ . '/../includes/header.php';
     background: #E3DDD2;
 }
 
-
 /* RESPONSIVE DESIGN */
 
 @media (max-width: 768px) {
@@ -485,7 +484,6 @@ require_once __DIR__ . '/../includes/header.php';
     .page-heading {
         flex-direction: column;
     }
-
 }
 
 @media (max-width: 480px) {
@@ -499,11 +497,9 @@ require_once __DIR__ . '/../includes/header.php';
         width: 100%;
         box-sizing: border-box;
     }
-
 }
 
 </style>
-
 
 <main class="main-content">
 
@@ -527,9 +523,7 @@ require_once __DIR__ . '/../includes/header.php';
 
     </div>
 
-
     <section class="form-panel">
-
 
         <!-- ERROR MESSAGES -->
 
@@ -551,13 +545,11 @@ require_once __DIR__ . '/../includes/header.php';
 
         <?php endif; ?>
 
-
         <!-- REGISTRATION FORM -->
 
         <form method="POST" data-prevent-double-submit>
 
             <?= csrfField() ?>
-
 
             <!-- PERSONAL INFORMATION -->
 
@@ -565,9 +557,7 @@ require_once __DIR__ . '/../includes/header.php';
                 Personal Information
             </h3>
 
-
             <div class="form-grid">
-
 
                 <div class="form-group">
 
@@ -587,7 +577,6 @@ require_once __DIR__ . '/../includes/header.php';
 
                 </div>
 
-
                 <div class="form-group">
 
                     <label>Middle Name</label>
@@ -602,7 +591,6 @@ require_once __DIR__ . '/../includes/header.php';
                     >
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -622,6 +610,33 @@ require_once __DIR__ . '/../includes/header.php';
 
                 </div>
 
+                <div class="form-group">
+
+                    <label>
+                        Sex <span class="required">*</span>
+                    </label>
+
+                    <select name="sex" required>
+
+                        <option value="">Select sex</option>
+
+                        <option
+                            value="Male"
+                            <?= $sex === 'Male' ? 'selected' : '' ?>
+                        >
+                            Male
+                        </option>
+
+                        <option
+                            value="Female"
+                            <?= $sex === 'Female' ? 'selected' : '' ?>
+                        >
+                            Female
+                        </option>
+
+                    </select>
+
+                </div>
 
                 <div class="form-group">
 
@@ -636,7 +651,6 @@ require_once __DIR__ . '/../includes/header.php';
 
                 </div>
 
-
                 <div class="form-group full-width">
 
                     <label>Address</label>
@@ -649,9 +663,7 @@ require_once __DIR__ . '/../includes/header.php';
 
                 </div>
 
-
             </div>
-
 
             <!-- CONTACT INFORMATION -->
 
@@ -659,9 +671,7 @@ require_once __DIR__ . '/../includes/header.php';
                 Contact Information
             </h3>
 
-
             <div class="form-grid">
-
 
                 <div class="form-group">
 
@@ -678,7 +688,6 @@ require_once __DIR__ . '/../includes/header.php';
 
                 </div>
 
-
                 <div class="form-group">
 
                     <label>Email Address</label>
@@ -693,7 +702,6 @@ require_once __DIR__ . '/../includes/header.php';
                     >
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -723,9 +731,7 @@ require_once __DIR__ . '/../includes/header.php';
 
                 </div>
 
-
             </div>
-
 
             <!-- PERMANENT QR CODE INFORMATION -->
 
@@ -752,7 +758,6 @@ require_once __DIR__ . '/../includes/header.php';
 
             </div>
 
-
             <!-- FORM ACTIONS -->
 
             <div class="form-actions">
@@ -764,7 +769,6 @@ require_once __DIR__ . '/../includes/header.php';
                     CANCEL
                 </a>
 
-
                 <button
                     type="submit"
                     class="btn-save"
@@ -774,15 +778,11 @@ require_once __DIR__ . '/../includes/header.php';
 
             </div>
 
-
         </form>
-
 
     </section>
 
-
 </main>
-
 
 <?php
 /*

@@ -1,12 +1,20 @@
 
 <?php
 
+/*
+|--------------------------------------------------------------------------
+| ALTAR SERVERS MANAGEMENT SYSTEM
+| CSRF Protection
+|--------------------------------------------------------------------------
+*/
+
+// Start session if not already started.
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 /**
- * Generate or retrieve the CSRF token.
+ * Generate or retrieve CSRF token.
  */
 function generateCSRFToken(): string
 {
@@ -18,7 +26,7 @@ function generateCSRFToken(): string
 }
 
 /**
- * Display the hidden CSRF input field.
+ * Display hidden CSRF input field.
  */
 function csrfField(): string
 {
@@ -32,12 +40,11 @@ function csrfField(): string
 }
 
 /**
- * Validate the submitted CSRF token.
+ * Validate submitted CSRF token.
  */
 function requireValidCSRFToken(): void
 {
     $submittedToken = $_POST['csrf_token'] ?? '';
-
     $sessionToken = $_SESSION['csrf_token'] ?? '';
 
     if (
@@ -48,6 +55,8 @@ function requireValidCSRFToken(): void
     ) {
         http_response_code(403);
 
-        exit('Security validation failed. Please refresh the page and try again.');
+        exit(
+            'Security validation failed. Please refresh the page and try again.'
+        );
     }
 }

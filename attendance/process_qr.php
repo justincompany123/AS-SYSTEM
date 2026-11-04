@@ -1,96 +1,360 @@
 
 <?php
+/*
+|--------------------------------------------------------------------------
+| ALTAR SERVERS MANAGEMENT SYSTEM
+| ATTENDANCE PROCESSING ENDPOINT
+| SUPABASE POSTGRESQL VERSION
+|--------------------------------------------------------------------------
+*/
 
 require_once __DIR__ . '/../includes/auth.php';
 requireLogin();
 
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../includes/csrf.php';
 
-header('Content-Type: application/json; charset=utf-8');
+date_default_timezone_set('Asia/Manila');
 
-function respond(int $status, bool $success, string $message, array $extra = []): void
-{
-    http_response_code($status);
+header('Content-Type: application/json; charset=UTF-8');
 
-    echo json_encode(array_merge([
-        'success' => $success,
-        'message' => $message
-    ], $extra));
+function sendAttendanceResponse(
+    bool $success,
+    string $message,
+    array $extra = [],
+    int $httpCode = 200
+): void {
+    http_response_code($httpCode);
+
+    echo json_encode(
+        array_merge([
+            'success' => $success,
+            'message' => $message
+        ], $extra),
+        JSON_UNESCAPED_UNICODE
+    );
 
     exit;
 }
 
+// =====================================================
+// REQUEST VALIDATION
+// =====================================================
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    respond(405, false, 'Invalid request method.');
+    sendAttendanceResponse(
+        false,
+        'Invalid request method.',
+        [],
+        405
+    );
 }
 
-try {
-    requireValidCSRFToken();
-} catch (Throwable $e) {
-    respond(403, false, 'Security validation failed. Refresh the page and try again.');
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
 }
 
-$qrToken = strtolower(trim($_POST['qr_token'] ?? ''));
+// Verify CSRF token.
+$sessionToken = $_SESSION['csrf_token'] ?? '';
+$submittedToken = $_POST['csrf_token'] ?? '';
+
+if (
+    empty($sessionToken) ||
+    empty($submittedToken) ||
+    !hash_equals($sessionToken, $submittedToken)
+) {
+    sendAttendanceResponse(
+        false,
+        'Your session token is invalid. Refresh the page and try again.',
+        [],
+        403
+    );
+}
+
+// =====================================================
+// INPUT VALUES
+// =====================================================
+
+$action = trim($_POST['action'] ?? '');
+
 $massDate = trim($_POST['mass_date'] ?? '');
+
 $massTime = trim($_POST['mass_time'] ?? '');
 
-$allowedTimes = ['6:00 AM', '8:00 AM', '10:00 AM', '5:00 PM'];
+$allowedMassTimes = [
+    '6:00 AM',
+    '8:00 AM',
+    '10:00 AM',
+    '5:00 PM'
+];
 
-if (!preg_match('/^[a-f0-9]{64}$/', $qrToken)) {
-    respond(400, false, 'Invalid QR code.');
+if (!in_array($action, [
+    'search',
+    'record_manual',
+    'record_qr'
+], true)) {
+    sendAttendanceResponse(
+        false,
+        'Invalid attendance action.',
+        [],
+        400
+    );
 }
 
-$dateObject = DateTime::createFromFormat('!Y-m-d', $massDate);
-
-if (!$dateObject || $dateObject->format('Y-m-d') !== $massDate) {
-    respond(400, false, 'Invalid Mass date.');
+if (
+    !preg_match('/^\d{4}-\d{2}-\d{2}$/', $massDate) ||
+    !checkdate(
+        (int) substr($massDate, 5, 2),
+        (int) substr($massDate, 8, 2),
+        (int) substr($massDate, 0, 4)
+    )
+) {
+    sendAttendanceResponse(
+        false,
+        'Please select a valid attendance date.',
+        [],
+        400
+    );
 }
 
-if (!in_array($massTime, $allowedTimes, true)) {
-    respond(400, false, 'Invalid Mass time.');
+if (!in_array($massTime, $allowedMassTimes, true)) {
+    sendAttendanceResponse(
+        false,
+        'Please select a valid Mass schedule.',
+        [],
+        400
+    );
 }
 
-$adminId = $_SESSION['admin_id'] ?? null;
+// =====================================================
+// SEARCH ACTIVE MEMBERS
+// =====================================================
 
-if (!$adminId) {
-    respond(401, false, 'Your admin session has expired. Please log in again.');
+if ($action === 'search') {
+
+    $search = trim($_POST['search'] ?? '');
+
+    if (mb_strlen($search) < 2) {
+        sendAttendanceResponse(
+            true,
+            'Enter at least two characters.',
+            [
+                'members' => []
+            ]
+        );
+    }
+
+    try {
+
+        $sql = "
+            SELECT
+                id,
+                member_code,
+                full_name
+
+            FROM public.members
+
+            WHERE status = 'Active'
+
+            AND (
+                full_name ILIKE :name
+                OR member_code ILIKE :code
+            )
+
+            ORDER BY full_name ASC
+
+            LIMIT 30
+        ";
+
+        $stmt = $pdo->prepare($sql);
+
+        $stmt->execute([
+            ':name' => '%' . $search . '%',
+            ':code' => '%' . $search . '%'
+        ]);
+
+        $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        sendAttendanceResponse(
+            true,
+            'Member search completed.',
+            [
+                'members' => $members
+            ]
+        );
+
+    } catch (PDOException $e) {
+
+        error_log(
+            'Attendance Member Search Error: ' . $e->getMessage()
+        );
+
+        sendAttendanceResponse(
+            false,
+            'Unable to search members. Please check the database.',
+            [],
+            500
+        );
+    }
 }
+
+// =====================================================
+// GET MEMBER INFORMATION
+// =====================================================
+
+$member = null;
 
 try {
 
-    $memberStmt = $pdo->prepare("
-        SELECT
-            id,
-            member_code,
-            first_name,
-            middle_name,
-            last_name,
-            member_status
-        FROM members
-        WHERE qr_token = ?
-        LIMIT 1
-    ");
+    if ($action === 'record_qr') {
 
-    $memberStmt->execute([$qrToken]);
-    $member = $memberStmt->fetch();
+        $qrToken = trim($_POST['qr_token'] ?? '');
+
+        if (!preg_match('/^[a-f0-9]{64}$/i', $qrToken)) {
+            sendAttendanceResponse(
+                false,
+                'Invalid QR code.',
+                [],
+                400
+            );
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT
+                id,
+                member_code,
+                full_name,
+                status
+
+            FROM public.members
+
+            WHERE qr_token = :qr_token
+
+            LIMIT 1
+        ");
+
+        $stmt->execute([
+            ':qr_token' => $qrToken
+        ]);
+
+    } else {
+
+        $memberId = filter_var(
+            $_POST['member_id'] ?? '',
+            FILTER_VALIDATE_INT
+        );
+
+        if (!$memberId || $memberId < 1) {
+            sendAttendanceResponse(
+                false,
+                'Please select a valid member.',
+                [],
+                400
+            );
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT
+                id,
+                member_code,
+                full_name,
+                status
+
+            FROM public.members
+
+            WHERE id = :member_id
+
+            LIMIT 1
+        ");
+
+        $stmt->execute([
+            ':member_id' => $memberId
+        ]);
+    }
+
+    $member = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$member) {
-        respond(404, false, 'QR code not recognized. Member is not registered.');
+        sendAttendanceResponse(
+            false,
+            'Member not found.',
+            [],
+            404
+        );
     }
 
-    if ($member['member_status'] !== 'Active') {
-        respond(403, false, 'This member is not currently active.');
+    if ($member['status'] !== 'Active') {
+        sendAttendanceResponse(
+            false,
+            'This member is not currently active.',
+            [],
+            400
+        );
     }
 
-    $fullName = trim(
-        $member['first_name'] . ' ' .
-        ($member['middle_name'] ? $member['middle_name'] . ' ' : '') .
-        $member['last_name']
+} catch (PDOException $e) {
+
+    error_log(
+        'Attendance Member Lookup Error: ' . $e->getMessage()
     );
 
-    $insertStmt = $pdo->prepare("
-        INSERT INTO mass_attendance (
+    sendAttendanceResponse(
+        false,
+        'Unable to retrieve member information.',
+        [],
+        500
+    );
+}
+
+// =====================================================
+// DETERMINE ATTENDANCE STATUS AND METHOD
+// =====================================================
+
+if ($action === 'record_qr') {
+
+    // Scanning a valid member QR code records Present.
+    $attendanceStatus = 'Present';
+    $attendanceMethod = 'QR Code';
+
+} else {
+
+    $attendanceStatus = trim(
+        $_POST['attendance_status'] ?? ''
+    );
+
+    if (!in_array(
+        $attendanceStatus,
+        ['Present', 'Excused'],
+        true
+    )) {
+        sendAttendanceResponse(
+            false,
+            'Only Present or Excused attendance is allowed.',
+            [],
+            400
+        );
+    }
+
+    $attendanceMethod = 'Manual';
+}
+
+// =====================================================
+// SAVE ATTENDANCE TO SUPABASE
+// =====================================================
+
+try {
+
+    /*
+     * The unique constraint on
+     * (member_id, mass_date, mass_time)
+     * prevents duplicate attendance records.
+     *
+     * If the same member is recorded again for the
+     * same date and Mass schedule, the existing
+     * record is updated.
+     */
+
+    $sql = "
+        INSERT INTO public.mass_attendance (
             member_id,
             mass_date,
             mass_time,
@@ -98,34 +362,118 @@ try {
             check_in_time,
             attendance_method,
             recorded_by
-        ) VALUES (
-            ?, ?, ?, 'Present', NOW(), 'QR Code', ?
         )
-    ");
 
-    $insertStmt->execute([
-        $member['id'],
-        $massDate,
-        $massTime,
-        $adminId
+        VALUES (
+            :member_id,
+            :mass_date,
+            :mass_time,
+            :attendance_status,
+            CURRENT_TIMESTAMP,
+            :attendance_method,
+            NULL
+        )
+
+        ON CONFLICT (
+            member_id,
+            mass_date,
+            mass_time
+        )
+
+        DO UPDATE SET
+
+            attendance_status = EXCLUDED.attendance_status,
+
+            check_in_time = CURRENT_TIMESTAMP,
+
+            attendance_method = EXCLUDED.attendance_method
+
+        RETURNING
+            id,
+            check_in_time,
+            attendance_status,
+            attendance_method
+    ";
+
+    $stmt = $pdo->prepare($sql);
+
+    $stmt->execute([
+        ':member_id' => $member['id'],
+        ':mass_date' => $massDate,
+        ':mass_time' => $massTime,
+        ':attendance_status' => $attendanceStatus,
+        ':attendance_method' => $attendanceMethod
     ]);
 
-    respond(200, true, 'Attendance successfully recorded!', [
-        'member_name' => $fullName,
-        'member_code' => $member['member_code'],
-        'mass_date' => $massDate,
-        'mass_time' => $massTime,
-        'attendance_status' => 'Present',
-        'check_in_time' => date('h:i:s A')
-    ]);
+    $attendance = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$attendance) {
+        sendAttendanceResponse(
+            false,
+            'Attendance could not be saved.',
+            [],
+            500
+        );
+    }
+
+    // Convert database timestamp to Philippine time.
+    $checkInTime = '-';
+
+    if (!empty($attendance['check_in_time'])) {
+
+        try {
+
+            $timestamp = new DateTimeImmutable(
+                $attendance['check_in_time']
+            );
+
+            $timestamp = $timestamp->setTimezone(
+                new DateTimeZone('Asia/Manila')
+            );
+
+            $checkInTime = $timestamp->format('h:i A');
+
+        } catch (Throwable $e) {
+
+            $checkInTime = '-';
+
+        }
+    }
+
+    // =================================================
+    // SUCCESS RESPONSE
+    // =================================================
+
+    $message = $attendanceStatus === 'Present'
+        ? 'Attendance successfully recorded as Present.'
+        : 'Attendance successfully recorded as Excused.';
+
+    sendAttendanceResponse(
+        true,
+        $message,
+        [
+            'attendance_id' => $attendance['id'],
+            'member_id' => $member['id'],
+            'member_name' => $member['full_name'],
+            'member_code' => $member['member_code'],
+            'mass_date' => $massDate,
+            'mass_time' => $massTime,
+            'attendance_status' => $attendanceStatus,
+            'attendance_method' => $attendanceMethod,
+            'check_in_time' => $checkInTime
+        ]
+    );
 
 } catch (PDOException $e) {
 
-    if ($e->getCode() === '23000') {
-        respond(409, false, 'This member has already been marked present for this Mass.');
-    }
+    error_log(
+        'Attendance Save Error: ' . $e->getMessage()
+    );
 
-    error_log('Mass attendance error: ' . $e->getMessage());
-
-    respond(500, false, 'A database error occurred while recording attendance.');
+    sendAttendanceResponse(
+        false,
+        'Unable to save attendance. Please check your database table and unique constraint.',
+        [],
+        500
+    );
 }

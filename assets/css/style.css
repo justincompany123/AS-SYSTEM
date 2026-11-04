@@ -698,3 +698,56 @@ tbody tr:hover {
         flex-wrap: wrap;
     }
 }
+
+
+.quick-action-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 18px;
+    background: #ffffff;
+    border: 1px solid #e5e9ef;
+    border-radius: 10px;
+    text-decoration: none;
+    color: #243247;
+    transition: 0.2s ease;
+}
+
+.quick-action-card:hover {
+    transform: translateY(-3px);
+    border-color: #c5a15b;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.07);
+}
+
+.quick-action-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #edf2f8;
+    color: #1b365d;
+    border-radius: 9px;
+    font-size: 21px;
+}
+
+.quick-action-content {
+    flex: 1;
+}
+
+.quick-action-content h3 {
+    margin: 0 0 5px;
+    font-size: 15px;
+    color: #1b365d;
+}
+
+.quick-action-content p {
+    margin: 0;
+    font-size: 12px;
+    color: #718096;
+}
+
+.quick-action-arrow {
+    color: #a68a50;
+}
+

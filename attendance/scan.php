@@ -1,14 +1,27 @@
 
 <?php
+/*
+|--------------------------------------------------------------------------
+| ALTAR SERVERS MANAGEMENT SYSTEM
+| QR SCANNER AND MANUAL ATTENDANCE
+|--------------------------------------------------------------------------
+*/
 
 require_once __DIR__ . '/../includes/auth.php';
 requireLogin();
 
-require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../includes/csrf.php';
+date_default_timezone_set('Asia/Manila');
 
-$pageTitle = 'QR Attendance Scanner';
-$activePage = 'scanner';
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+
+// Create CSRF token if one does not exist.
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+$csrfToken = $_SESSION['csrf_token'];
 
 $massTimes = [
     '6:00 AM',
@@ -19,524 +32,437 @@ $massTimes = [
 
 $selectedDate = date('Y-m-d');
 
-require_once __DIR__ . '/../includes/header.php';
+$processUrl = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/process_qr.php';
 
+require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 
 <style>
-
-/* ==========================================
-   QR ATTENDANCE SCANNER
-   ST. FRANCIS XAVIER CATHEDRAL
-========================================== */
-
-.mass-scanner {
-    width: 100%;
-    max-width: 1000px;
-    margin: 0 auto;
+.attendance-page {
+    padding: 25px;
+    color: #243247;
 }
 
-/* PAGE HEADING */
-
-.scanner-heading {
-    margin-bottom: 25px;
+.attendance-heading {
+    margin-bottom: 22px;
 }
 
-.scanner-heading h1 {
-    font-family: 'Cinzel', serif;
-    color: #172C46;
-    font-size: 27px;
+.attendance-heading h1 {
+    color: #172d4b;
+    font-size: 25px;
+    margin: 0 0 7px;
+}
+
+.attendance-heading p {
+    color: #718096;
+    font-size: 13px;
+    margin: 0;
+}
+
+.attendance-card {
+    background: #fff;
+    border: 1px solid #e5e9ef;
+    border-radius: 11px;
+    padding: 22px;
+    margin-bottom: 20px;
+    box-shadow: 0 3px 10px rgba(0,0,0,.035);
+}
+
+.attendance-card h2 {
+    color: #1b365d;
+    font-size: 17px;
+    margin: 0 0 17px;
+}
+
+.attendance-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #45546a;
     margin-bottom: 8px;
 }
 
-.scanner-heading p {
-    color: #777;
-    font-size: 14px;
-    line-height: 1.6;
-}
-
-/* MAIN PANEL */
-
-.scanner-panel {
-    background: #FFFFFF;
-    border: 1px solid #E8DFD0;
-    border-radius: 14px;
-    padding: 25px;
-    margin-bottom: 22px;
-    box-shadow: 0 4px 15px rgba(23, 44, 70, 0.04);
-}
-
-.scanner-panel h2 {
-    font-family: 'Cinzel', serif;
-    font-size: 18px;
-    color: #172C46;
-    margin-bottom: 15px;
-}
-
-/* MASS DATE */
-
-.mass-date-group {
-    margin-bottom: 25px;
-}
-
-.mass-date-group label {
-    display: block;
-    color: #172C46;
-    font-weight: 700;
-    font-size: 13px;
-    margin-bottom: 9px;
-}
-
-.mass-date {
+.attendance-input {
     width: 100%;
-    padding: 13px 14px;
-    border: 1px solid #DCD4C7;
-    border-radius: 8px;
-    background: #FFFFFF;
-    color: #172C46;
-    font-size: 14px;
-    outline: none;
+    height: 43px;
+    padding: 9px 12px;
+    border: 1px solid #d8dee8;
+    border-radius: 7px;
+    background: #fff;
+    color: #26364a;
+    box-sizing: border-box;
+    font-size: 13px;
 }
 
-.mass-date:focus {
-    border-color: #B18A43;
-    box-shadow: 0 0 0 3px rgba(177, 138, 67, 0.12);
+.attendance-controls {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 16px;
+    margin-bottom: 20px;
 }
-
-/* MASS TIME OPTIONS */
 
 .mass-options {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 13px;
-    margin-bottom: 25px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 9px;
 }
 
 .mass-option {
-    border: 2px solid #E8DFD0;
-    background: #FFFFFF;
-    color: #172C46;
-    padding: 20px 10px;
-    border-radius: 11px;
-    font-size: 17px;
-    font-weight: 700;
+    border: 1px solid #d8dee8;
+    background: #f7f8fa;
+    color: #34445a;
+    padding: 12px 5px;
+    border-radius: 7px;
     cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.mass-option:hover {
-    border-color: #B18A43;
-    transform: translateY(-2px);
+    font-weight: 700;
+    font-size: 12px;
 }
 
 .mass-option.active {
-    background: #172C46;
-    color: #FFFFFF;
-    border-color: #B18A43;
-    box-shadow: 0 4px 12px rgba(23, 44, 70, 0.15);
+    background: #1b365d;
+    color: white;
+    border-color: #1b365d;
 }
 
-.mass-option small {
-    display: block;
-    margin-top: 7px;
-    font-size: 11px;
-    font-weight: 500;
-    color: inherit;
-    opacity: 0.8;
-}
-
-.mass-option:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-}
-
-/* CURRENT SESSION */
-
-.session-display {
-    background: #F8F5ED;
-    border-left: 4px solid #B18A43;
-    border-radius: 8px;
-    padding: 17px;
-    margin-bottom: 22px;
-}
-
-.session-display .session-label {
-    display: block;
-    color: #8A7651;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    margin-bottom: 7px;
-}
-
-.session-display strong {
-    display: block;
-    color: #172C46;
-    font-family: 'Cinzel', serif;
-    font-size: 18px;
-}
-
-.session-display small {
-    display: block;
-    color: #777;
-    font-size: 12px;
-    margin-top: 6px;
-}
-
-/* CAMERA BUTTONS */
-
-.scanner-actions {
+.attendance-tabs {
     display: flex;
-    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 17px;
+}
+
+.attendance-tab {
+    padding: 10px 17px;
+    border: 1px solid #d8dee8;
+    background: #f7f8fa;
+    border-radius: 7px;
+    color: #34445a;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.attendance-tab.active {
+    background: #1b365d;
+    border-color: #1b365d;
+    color: white;
+}
+
+.search-wrapper {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.search-wrapper input {
+    width: 100%;
+    height: 46px;
+    border: 1px solid #d8dee8;
+    border-radius: 7px;
+    padding: 10px 14px 10px 40px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.search-wrapper i {
+    position: absolute;
+    left: 14px;
+    top: 16px;
+    color: #8491a3;
+}
+
+.member-results {
+    display: grid;
     gap: 10px;
 }
 
-.scanner-actions button {
+.member-result {
+    border: 1px solid #e5e9ef;
+    border-radius: 9px;
+    padding: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.member-result-name {
+    color: #203b60;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.member-result-code {
+    color: #8491a3;
+    font-size: 11px;
+    margin-top: 5px;
+}
+
+.member-result-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.status-button {
     border: none;
-    border-radius: 8px;
-    padding: 13px 22px;
-    font-size: 13px;
+    border-radius: 6px;
+    padding: 10px 15px;
+    font-size: 12px;
     font-weight: 700;
     cursor: pointer;
-    transition: 0.2s ease;
+    color: white;
 }
 
-.start-camera {
-    background: #172C46;
-    color: #FFFFFF;
+.present-button {
+    background: #21864e;
 }
 
-.start-camera:hover {
-    background: #102137;
+.excused-button {
+    background: #426a9c;
 }
 
-.stop-camera {
-    background: #EEE9DF;
-    color: #172C46;
+.status-button:disabled {
+    opacity: .6;
+    cursor: wait;
 }
 
-.scanner-actions button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+.scanner-box {
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
 }
-
-/* QR CAMERA */
 
 #qr-reader {
     width: 100%;
-    max-width: 520px;
-    margin: 25px auto;
     overflow: hidden;
-    border-radius: 12px;
+    border-radius: 9px;
 }
 
-#qr-reader video {
-    border-radius: 10px;
+.scanner-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 15px;
 }
 
-/* SCANNER STATUS */
+.scanner-button {
+    padding: 11px 18px;
+    border: none;
+    border-radius: 7px;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.start-button {
+    background: #21864e;
+}
+
+.stop-button {
+    background: #b83b32;
+}
 
 .scanner-status {
-    display: none;
-    padding: 15px;
-    border-radius: 8px;
+    padding: 12px;
     margin-top: 15px;
-    font-size: 13px;
-    line-height: 1.7;
-    overflow-wrap: anywhere;
-}
-
-.scanner-status.success,
-.scanner-status.error,
-.scanner-status.warning,
-.scanner-status.info {
-    display: block;
+    border-radius: 7px;
+    background: #f1f4f8;
+    color: #45546a;
+    font-size: 12px;
+    text-align: center;
 }
 
 .scanner-status.success {
-    background: #E9F5EC;
-    border: 1px solid #C9E5D0;
-    color: #236238;
+    background: #e3f5e9;
+    color: #21864e;
 }
 
 .scanner-status.error {
-    background: #FBECEC;
-    border: 1px solid #EDCCCC;
-    color: #963B3B;
+    background: #fde9e7;
+    color: #bd3b31;
 }
 
-.scanner-status.warning {
-    background: #FFF6DF;
-    border: 1px solid #EEDCAE;
-    color: #80601E;
-}
-
-.scanner-status.info {
-    background: #EDF3FA;
-    border: 1px solid #D4E1EF;
-    color: #315575;
-}
-
-/* INSTRUCTIONS */
-
-.scanner-instructions {
-    background: #F8F5ED;
-    border: 1px solid #E8DFD0;
-    border-radius: 9px;
-    padding: 17px;
-    margin-top: 22px;
-    color: #625D52;
+.empty-results {
+    padding: 25px;
+    text-align: center;
+    color: #8491a3;
     font-size: 13px;
-    line-height: 1.8;
 }
 
-.scanner-instructions strong {
-    color: #172C46;
+.manual-section,
+.scanner-section {
+    display: none;
 }
 
-.scanner-instructions ol {
-    padding-left: 20px;
-    margin: 10px 0;
+.manual-section.active,
+.scanner-section.active {
+    display: block;
 }
 
-/* MOBILE */
+@media(max-width:700px) {
+    .attendance-page {
+        padding: 14px;
+    }
 
-@media (max-width: 768px) {
+    .attendance-controls {
+        grid-template-columns: 1fr;
+    }
 
     .mass-options {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(2, 1fr);
     }
 
-    .scanner-panel {
-        padding: 19px;
+    .member-result {
+        align-items: flex-start;
     }
 
-}
-
-@media (max-width: 480px) {
-
-    .scanner-heading h1 {
-        font-size: 22px;
-    }
-
-    .scanner-panel {
-        padding: 15px;
-    }
-
-    .mass-option {
-        padding: 17px 8px;
-        font-size: 15px;
-    }
-
-    .scanner-actions {
-        flex-direction: column;
-    }
-
-    .scanner-actions button {
+    .member-result-actions {
         width: 100%;
     }
 
+    .member-result-actions button {
+        flex: 1;
+    }
 }
-
 </style>
 
+<div class="attendance-page">
 
-<div class="main-content">
+    <div class="attendance-heading">
+        <h1>Attendance Recording</h1>
+        <p>Record altar server attendance through QR scanning or manual search.</p>
+    </div>
 
-    <div class="mass-scanner">
+    <div class="attendance-card">
 
-        <!-- PAGE HEADING -->
+        <h2>Attendance Details</h2>
 
-        <div class="scanner-heading">
+        <div class="attendance-controls">
 
-            <h1>QR Attendance Scanner</h1>
-
-            <p>
-                Scan each altar server's permanent QR code
-                to automatically record their attendance
-                for the selected Sunday Mass.
-            </p>
-
-        </div>
-
-
-        <!-- SCANNER PANEL -->
-
-        <div class="scanner-panel">
-
-            <!-- MASS DATE -->
-
-            <div class="mass-date-group">
-
-                <label for="mass-date">
-                    SELECT MASS DATE
+            <div>
+                <label class="attendance-label" for="mass-date">
+                    Attendance Date
                 </label>
 
                 <input
                     type="date"
                     id="mass-date"
-                    class="mass-date"
-                    value="<?= htmlspecialchars($selectedDate) ?>"
-                    required
+                    class="attendance-input"
+                    value="<?= htmlspecialchars($selectedDate, ENT_QUOTES, 'UTF-8') ?>"
                 >
-
             </div>
 
+            <div>
+                <label class="attendance-label">
+                    Select Sunday Mass Schedule
+                </label>
 
-            <!-- MASS TIME -->
+                <div class="mass-options">
 
-            <h2>Select Mass Time</h2>
+                    <?php foreach ($massTimes as $index => $time): ?>
 
-            <div class="mass-options">
+                        <button
+                            type="button"
+                            class="mass-option <?= $index === 0 ? 'active' : '' ?>"
+                            data-mass-time="<?= htmlspecialchars($time, ENT_QUOTES, 'UTF-8') ?>"
+                        >
+                            <?= htmlspecialchars($time, ENT_QUOTES, 'UTF-8') ?>
+                        </button>
 
-                <?php foreach ($massTimes as $index => $time): ?>
+                    <?php endforeach; ?>
+
+                </div>
+            </div>
+
+        </div>
+
+        <div class="attendance-tabs">
+
+            <button
+                type="button"
+                class="attendance-tab active"
+                data-tab="scanner"
+            >
+                <i class="fas fa-qrcode"></i>
+                QR Scanner
+            </button>
+
+            <button
+                type="button"
+                class="attendance-tab"
+                data-tab="manual"
+            >
+                <i class="fas fa-search"></i>
+                Search Member
+            </button>
+
+        </div>
+
+        <!-- QR SCANNER -->
+
+        <div class="scanner-section active" id="scanner-section">
+
+            <h2>Scan Member QR Code</h2>
+
+            <div class="scanner-box">
+
+                <div id="qr-reader"></div>
+
+                <div class="scanner-buttons">
 
                     <button
                         type="button"
-                        class="mass-option <?= $index === 0 ? 'active' : '' ?>"
-                        data-mass-time="<?= htmlspecialchars($time) ?>"
-                        aria-pressed="<?= $index === 0 ? 'true' : 'false' ?>"
+                        class="scanner-button start-button"
+                        id="start-scanner"
                     >
-
-                        <?= htmlspecialchars($time) ?>
-
-                        <small>
-                            Sunday Mass
-                        </small>
-
+                        <i class="fas fa-camera"></i>
+                        Start Scanner
                     </button>
 
-                <?php endforeach; ?>
+                    <button
+                        type="button"
+                        class="scanner-button stop-button"
+                        id="stop-scanner"
+                    >
+                        Stop Scanner
+                    </button>
 
-            </div>
+                </div>
 
-
-            <!-- CURRENT SESSION -->
-
-            <div class="session-display">
-
-                <span class="session-label">
-                    CURRENT ATTENDANCE SESSION
-                </span>
-
-                <strong id="selected-mass-display">
-                    <?= htmlspecialchars($selectedDate) ?> — 6:00 AM
-                </strong>
-
-                <small>
-                    All successfully scanned active members
-                    will be recorded as Present for this Mass.
-                </small>
-
-            </div>
-
-
-            <!-- CAMERA CONTROLS -->
-
-            <div class="scanner-actions">
-
-                <button
-                    type="button"
-                    id="start-scanner"
-                    class="start-camera"
-                >
-                    <span>▦</span>
-                    START CAMERA
-                </button>
-
-                <button
-                    type="button"
-                    id="stop-scanner"
-                    class="stop-camera"
-                    disabled
-                >
-                    STOP CAMERA
-                </button>
-
-            </div>
-
-
-            <!-- CAMERA DISPLAY -->
-
-            <div id="qr-reader"></div>
-
-
-            <!-- SCANNER RESULT -->
-
-            <div
-                id="scanner-status"
-                class="scanner-status"
-                role="status"
-                aria-live="polite"
-            ></div>
-
-
-            <!-- INSTRUCTIONS -->
-
-            <div class="scanner-instructions">
-
-                <strong>Scanner Instructions</strong>
-
-                <ol>
-
-                    <li>
-                        Select the date of the Mass.
-                    </li>
-
-                    <li>
-                        Select the correct Mass time.
-                    </li>
-
-                    <li>
-                        Click START CAMERA.
-                    </li>
-
-                    <li>
-                        Allow camera permission when requested.
-                    </li>
-
-                    <li>
-                        Scan the altar server's permanent QR code.
-                    </li>
-
-                    <li>
-                        Wait for the attendance confirmation.
-                    </li>
-
-                </ol>
-
-                <strong>Important:</strong>
-
-                Each member has one permanent QR code.
-                The same QR code can be used for different
-                Mass times, but duplicate attendance for
-                the same date and Mass time will be rejected.
+                <div class="scanner-status" id="scanner-status">
+                    Select a Mass schedule and start scanning.
+                </div>
 
             </div>
 
         </div>
 
+        <!-- MANUAL ATTENDANCE -->
 
-        <!-- ATTENDANCE HISTORY LINK -->
+        <div class="manual-section" id="manual-section">
 
-        <div class="scanner-panel">
+            <h2>Search and Record Member Attendance</h2>
 
-            <h2>Attendance Management</h2>
+            <div class="search-wrapper">
 
-            <p style="color:#777; font-size:14px; margin-bottom:17px;">
+                <i class="fas fa-search"></i>
 
-                Review attendance records and check-in times
-                for all Sunday Mass schedules.
+                <input
+                    type="text"
+                    id="member-search"
+                    placeholder="Search member name or member code..."
+                    autocomplete="off"
+                >
 
-            </p>
+            </div>
 
-            <a
-                href="/AS-SYSTEM/attendance/index.php"
-                class="btn btn-primary"
-            >
-                VIEW ATTENDANCE RECORDS
-            </a>
+            <div class="member-results" id="member-results">
+
+                <div class="empty-results">
+                    Enter a member name or member code to search.
+                </div>
+
+            </div>
 
         </div>
 
@@ -544,37 +470,449 @@ require_once __DIR__ . '/../includes/header.php';
 
 </div>
 
-
-<!-- CSRF TOKEN -->
-
-<div id="csrf-container" hidden>
-
-    <?= csrfField() ?>
-
-</div>
-
-
-<!-- QR SCANNER LIBRARY -->
+<input
+    type="hidden"
+    id="csrf-token"
+    value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>"
+>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 
-
-<!-- QR SCANNER CONFIGURATION -->
-
 <script>
+(() => {
 
-window.QR_ATTENDANCE_CONFIG = {
+    const processUrl = <?= json_encode($processUrl) ?>;
 
-    processUrl: '/AS-SYSTEM/attendance/process_qr.php'
+    const csrfToken = document.getElementById('csrf-token').value;
+    const dateInput = document.getElementById('mass-date');
+    const searchInput = document.getElementById('member-search');
+    const resultsContainer = document.getElementById('member-results');
+    const statusBox = document.getElementById('scanner-status');
 
-};
+    let selectedMassTime = '6:00 AM';
+    let html5QrCode = null;
+    let scannerRunning = false;
+    let searchTimeout = null;
+    let lastScannedToken = '';
+    let lastScanTime = 0;
 
+    // -------------------------------------------------
+    // NOTIFICATIONS
+    // -------------------------------------------------
+
+    function showStatus(message, type = '') {
+
+        statusBox.textContent = message;
+        statusBox.className = 'scanner-status ' + type;
+
+    }
+
+    // -------------------------------------------------
+    // SELECT MASS TIME
+    // -------------------------------------------------
+
+    document.querySelectorAll('.mass-option').forEach(button => {
+
+        button.addEventListener('click', () => {
+
+            document.querySelectorAll('.mass-option').forEach(item => {
+                item.classList.remove('active');
+            });
+
+            button.classList.add('active');
+
+            selectedMassTime = button.dataset.massTime;
+
+            showStatus('Selected Mass schedule: ' + selectedMassTime);
+
+        });
+
+    });
+
+    // -------------------------------------------------
+    // SWITCH TABS
+    // -------------------------------------------------
+
+    document.querySelectorAll('.attendance-tab').forEach(button => {
+
+        button.addEventListener('click', () => {
+
+            document.querySelectorAll('.attendance-tab').forEach(item => {
+                item.classList.remove('active');
+            });
+
+            button.classList.add('active');
+
+            document.querySelectorAll('.scanner-section, .manual-section')
+                .forEach(section => section.classList.remove('active'));
+
+            document.getElementById(
+                button.dataset.tab + '-section'
+            ).classList.add('active');
+
+            if (button.dataset.tab === 'manual' && scannerRunning) {
+                stopScanner();
+            }
+
+        });
+
+    });
+
+    // -------------------------------------------------
+    // SEND REQUEST
+    // -------------------------------------------------
+
+    async function sendRequest(data) {
+
+        const formData = new FormData();
+
+        Object.entries(data).forEach(([key, value]) => {
+            formData.append(key, value);
+        });
+
+        formData.append('csrf_token', csrfToken);
+        formData.append('mass_date', dateInput.value);
+        formData.append('mass_time', selectedMassTime);
+
+        const response = await fetch(processUrl, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Unable to process attendance.');
+        }
+
+        return result;
+    }
+
+    // -------------------------------------------------
+    // MANUAL MEMBER SEARCH
+    // -------------------------------------------------
+
+    searchInput.addEventListener('input', () => {
+
+        clearTimeout(searchTimeout);
+
+        const query = searchInput.value.trim();
+
+        if (query.length < 2) {
+
+            resultsContainer.innerHTML = `
+                <div class="empty-results">
+                    Enter at least two characters to search.
+                </div>
+            `;
+
+            return;
+        }
+
+        resultsContainer.innerHTML = `
+            <div class="empty-results">Searching members...</div>
+        `;
+
+        searchTimeout = setTimeout(async () => {
+
+            try {
+
+                const result = await sendRequest({
+                    action: 'search',
+                    search: query
+                });
+
+                renderMembers(result.members || []);
+
+            } catch (error) {
+
+                resultsContainer.innerHTML = `
+                    <div class="empty-results">
+                        ${escapeHtml(error.message)}
+                    </div>
+                `;
+
+            }
+
+        }, 350);
+
+    });
+
+    // -------------------------------------------------
+    // DISPLAY SEARCH RESULTS
+    // -------------------------------------------------
+
+    function renderMembers(members) {
+
+        if (members.length === 0) {
+
+            resultsContainer.innerHTML = `
+                <div class="empty-results">
+                    No matching active members found.
+                </div>
+            `;
+
+            return;
+        }
+
+        resultsContainer.innerHTML = '';
+
+        members.forEach(member => {
+
+            const card = document.createElement('div');
+
+            card.className = 'member-result';
+
+            card.innerHTML = `
+                <div>
+                    <div class="member-result-name">
+                        ${escapeHtml(member.full_name)}
+                    </div>
+
+                    <div class="member-result-code">
+                        Member Code: ${escapeHtml(member.member_code)}
+                    </div>
+                </div>
+
+                <div class="member-result-actions">
+
+                    <button
+                        type="button"
+                        class="status-button present-button"
+                        data-status="Present"
+                    >
+                        <i class="fas fa-check"></i>
+                        Present
+                    </button>
+
+                    <button
+                        type="button"
+                        class="status-button excused-button"
+                        data-status="Excused"
+                    >
+                        <i class="fas fa-calendar-check"></i>
+                        Excused
+                    </button>
+
+                </div>
+            `;
+
+            card.querySelectorAll('.status-button').forEach(button => {
+
+                button.addEventListener('click', async () => {
+
+                    const attendanceStatus = button.dataset.status;
+
+                    card.querySelectorAll('button').forEach(item => {
+                        item.disabled = true;
+                    });
+
+                    button.textContent = 'Saving...';
+
+                    try {
+
+                        const result = await sendRequest({
+                            action: 'record_manual',
+                            member_id: member.id,
+                            attendance_status: attendanceStatus
+                        });
+
+                        card.innerHTML = `
+                            <div>
+                                <div class="member-result-name">
+                                    ${escapeHtml(member.full_name)}
+                                </div>
+
+                                <div class="member-result-code">
+                                    ${escapeHtml(result.message)}
+                                </div>
+                            </div>
+
+                            <span class="attendance-badge">
+                                ${escapeHtml(attendanceStatus)}
+                            </span>
+                        `;
+
+                        card.style.borderColor = '#21864e';
+
+                    } catch (error) {
+
+                        card.querySelectorAll('button').forEach(item => {
+                            item.disabled = false;
+                        });
+
+                        button.textContent = attendanceStatus;
+
+                        alert(error.message);
+
+                    }
+
+                });
+
+            });
+
+            resultsContainer.appendChild(card);
+
+        });
+
+    }
+
+    // -------------------------------------------------
+    // QR SCAN CALLBACK
+    // -------------------------------------------------
+
+    async function onScanSuccess(decodedText) {
+
+        const now = Date.now();
+
+        if (
+            decodedText === lastScannedToken &&
+            now - lastScanTime < 3000
+        ) {
+            return;
+        }
+
+        lastScannedToken = decodedText;
+        lastScanTime = now;
+
+        if (!/^[a-f0-9]{64}$/i.test(decodedText)) {
+
+            showStatus('Invalid QR code. Please scan a registered member QR code.', 'error');
+            return;
+
+        }
+
+        showStatus('QR code detected. Recording attendance...');
+
+        try {
+
+            const result = await sendRequest({
+                action: 'record_qr',
+                qr_token: decodedText
+            });
+
+            showStatus(
+                result.member_name +
+                ' successfully recorded as Present. ' +
+                result.check_in_time,
+                'success'
+            );
+
+        } catch (error) {
+
+            showStatus(error.message, 'error');
+
+        }
+
+    }
+
+    // -------------------------------------------------
+    // START SCANNER
+    // -------------------------------------------------
+
+    async function startScanner() {
+
+        if (scannerRunning) {
+            return;
+        }
+
+        try {
+
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode('qr-reader');
+            }
+
+            await html5QrCode.start(
+                { facingMode: 'environment' },
+                {
+                    fps: 10,
+                    qrbox: {
+                        width: 250,
+                        height: 250
+                    }
+                },
+                onScanSuccess
+            );
+
+            scannerRunning = true;
+
+            showStatus('Camera started. Scan a member QR code.');
+
+        } catch (error) {
+
+            showStatus(
+                'Unable to start camera. Allow camera permission and use localhost or HTTPS.',
+                'error'
+            );
+
+        }
+
+    }
+
+    // -------------------------------------------------
+    // STOP SCANNER
+    // -------------------------------------------------
+
+    async function stopScanner() {
+
+        if (!html5QrCode || !scannerRunning) {
+            return;
+        }
+
+        try {
+
+            await html5QrCode.stop();
+
+            scannerRunning = false;
+
+            showStatus('Scanner stopped.');
+
+        } catch (error) {
+
+            showStatus('Unable to stop scanner.', 'error');
+
+        }
+
+    }
+
+    document.getElementById('start-scanner')
+        .addEventListener('click', startScanner);
+
+    document.getElementById('stop-scanner')
+        .addEventListener('click', stopScanner);
+
+    // -------------------------------------------------
+    // ESCAPE HTML
+    // -------------------------------------------------
+
+    function escapeHtml(value) {
+
+        return String(value ?? '').replace(/[&<>"']/g, character => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        })[character]);
+
+    }
+
+    // Stop scanner when leaving page.
+    window.addEventListener('beforeunload', () => {
+
+        if (scannerRunning && html5QrCode) {
+            html5QrCode.stop().catch(() => {});
+        }
+
+    });
+
+})();
 </script>
 
-
-<!-- CUSTOM QR SCANNER JAVASCRIPT -->
-
-<script src="/AS-SYSTEM/assets/js/qr-scanner.js"></script>
-
-
-<?php require_once __DIR__ . '/../includes/footer.php'; ?>
+<?php
+// END OF ATTENDANCE SCANNER
+?>

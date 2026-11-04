@@ -1,10 +1,17 @@
 
+
 <?php
+
+// =====================================================
+// AS-SYSTEM LOGIN
+// SUPABASE POSTGRESQL VERSION
+// =====================================================
+
 session_start();
 
 require_once __DIR__ . '/config/database.php';
 
-// If already logged in, go to dashboard.
+// Already logged in? Go to dashboard.
 if (isset($_SESSION['admin_id'])) {
     header('Location: index.php');
     exit;
@@ -19,38 +26,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
 
     if ($username === '' || $password === '') {
+
         $error = 'Please enter your username and password.';
+
     } else {
+
         try {
-            $stmt = $pdo->prepare(
-                "SELECT * FROM admins WHERE username = :username LIMIT 1"
-            );
 
-            $stmt->execute(['username' => $username]);
-            $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Find active administrator in Supabase
+            $stmt = $pdo->prepare("
+                SELECT
+                    id,
+                    full_name,
+                    username,
+                    email,
+                    password,
+                    role,
+                    status
+                FROM public.admins
+                WHERE username = :username
+                LIMIT 1
+            ");
 
-            if ($admin && password_verify($password, $admin['password'])) {
+            $stmt->execute([
+                'username' => $username
+            ]);
 
+            $admin = $stmt->fetch();
+
+            // Verify account and password
+            if (
+                $admin &&
+                $admin['status'] === 'Active' &&
+                password_verify($password, $admin['password'])
+            ) {
+
+                // Regenerate session ID after login
                 session_regenerate_id(true);
 
+                // Store administrator information
                 $_SESSION['admin_id'] = $admin['id'];
-                $_SESSION['username'] = $admin['username'];
-                $_SESSION['admin_name'] = $admin['full_name']
-                    ?? $admin['username'];
 
+                $_SESSION['username'] = $admin['username'];
+
+                $_SESSION['admin_name'] = $admin['full_name'];
+
+                $_SESSION['admin_role'] = $admin['role'];
+
+                $_SESSION['admin_email'] = $admin['email'];
+
+                // Redirect to dashboard
                 header('Location: index.php');
                 exit;
 
             } else {
+
                 $error = 'Invalid username or password.';
+
             }
 
         } catch (PDOException $e) {
+
+            error_log('Login database error: ' . $e->getMessage());
+
             $error = 'Unable to process your login. Please try again.';
+
         }
+
     }
+
 }
+
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>

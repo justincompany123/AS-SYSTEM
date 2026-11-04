@@ -3,8 +3,9 @@
 
 /*
 |--------------------------------------------------------------------------
-| ALTAR SERVERS WEB SYSTEM
-| Attendance History
+| ALTAR SERVERS MANAGEMENT SYSTEM
+| ATTENDANCE HISTORY
+| SUPABASE POSTGRESQL VERSION
 |--------------------------------------------------------------------------
 */
 
@@ -13,126 +14,124 @@ requireLogin();
 
 require_once __DIR__ . '/../config/database.php';
 
-$pageTitle = 'Attendance History';
-$activePage = 'attendance';
+// =====================================================
+// TIMEZONE
+// =====================================================
 
-$assignmentId = filter_input(INPUT_GET, 'assignment_id', FILTER_VALIDATE_INT);
-$filterDate = trim($_GET['date'] ?? '');
-$filterStatus = trim($_GET['status'] ?? '');
-$search = trim($_GET['search'] ?? '');
+date_default_timezone_set('Asia/Manila');
 
-$allowedStatuses = ['Present', 'Absent', 'Late', 'Excused'];
+// =====================================================
+// HELPER FUNCTIONS
+// =====================================================
 
-if (!in_array($filterStatus, $allowedStatuses, true)) {
-    $filterStatus = '';
+function historyEscape($value): string
+{
+    return htmlspecialchars(
+        (string)($value ?? ''),
+        ENT_QUOTES,
+        'UTF-8'
+    );
 }
 
-// Load schedules for the filter dropdown.
-$stmt = $pdo->query("
-    SELECT id, mass_date, mass_time, mass_title
-    FROM assignments
-    ORDER BY mass_date DESC, mass_time ASC
-");
+function historyCheckInTime($value): string
+{
+    if (empty($value)) {
+        return '-';
+    }
 
-$schedules = $stmt->fetchAll();
+    try {
+        /*
+         * If the database timestamp contains a timezone
+         * offset, PHP will respect it automatically.
+         *
+         * If no offset exists, this assumes Manila time.
+         */
 
-// Build the attendance query.
-$sql = "
-    SELECT
-        att.id,
-        att.attendance_status,
-        att.check_in_time,
-        att.attendance_method,
-        att.created_at,
+        $hasTimezone = preg_match(
+            '/(Z|[+-][0-9]{2}:?[0-9]{2})$/i',
+            trim($value)
+        );
 
-        m.member_code,
-        m.first_name,
-        m.middle_name,
-        m.last_name,
+        $timezone = $hasTimezone
+            ? new DateTimeZone('UTC')
+            : new DateTimeZone('Asia/Manila');
 
-        a.mass_date,
-        a.mass_time,
-        a.mass_title
+        $date = new DateTimeImmutable($value, $timezone);
 
-    FROM attendance att
+        $date = $date->setTimezone(
+            new DateTimeZone('Asia/Manila')
+        );
 
-    INNER JOIN members m
-        ON m.id = att.member_id
+        return $date->format('h:i A');
 
-    INNER JOIN assignments a
-        ON a.id = att.assignment_id
-
-    WHERE 1 = 1
-";
-
-$params = [];
-
-if ($assignmentId) {
-    $sql .= " AND a.id = :assignment_id";
-    $params[':assignment_id'] = $assignmentId;
-}
-
-if ($filterDate !== '') {
-    $dateObject = DateTime::createFromFormat('Y-m-d', $filterDate);
-
-    if ($dateObject && $dateObject->format('Y-m-d') === $filterDate) {
-        $sql .= " AND a.mass_date = :mass_date";
-        $params[':mass_date'] = $filterDate;
-    } else {
-        $filterDate = '';
+    } catch (Throwable $e) {
+        return '-';
     }
 }
 
-if ($filterStatus !== '') {
-    $sql .= " AND att.attendance_status = :attendance_status";
-    $params[':attendance_status'] = $filterStatus;
+// =====================================================
+// FILTER VALUES
+// =====================================================
+
+$today = date('Y-m-d');
+
+// Blank means display attendance from all dates.
+$selectedDate = $_GET['date'] ?? '';
+$selectedMass = $_GET['mass_time'] ?? '';
+$selectedStatus = $_GET['status'] ?? '';
+$search = trim($_GET['search'] ?? '');
+
+$allowedMassTimes = [
+    '6:00 AM',
+    '8:00 AM',
+    '10:00 AM',
+    '5:00 PM'
+];
+
+$allowedStatuses = [
+    'Present',
+    'Absent',
+    'Late',
+    'Excused'
+];
+
+// Validate date filter
+if ($selectedDate !== '') {
+    $dateObject = DateTime::createFromFormat(
+        '!Y-m-d',
+        $selectedDate
+    );
+
+    if (
+        !$dateObject ||
+        $dateObject->format('Y-m-d') !== $selectedDate
+    ) {
+        $selectedDate = '';
+    }
+}
+// Validate Mass time
+if (
+    $selectedMass !== '' &&
+    !in_array($selectedMass, $allowedMassTimes, true)
+) {
+    $selectedMass = '';
 }
 
-if ($search !== '') {
-    $sql .= "
-        AND (
-            m.first_name LIKE :search_first
-            OR m.middle_name LIKE :search_middle
-            OR m.last_name LIKE :search_last
-            OR m.member_code LIKE :search_code
-        )
-    ";
-
-    $searchValue = '%' . $search . '%';
-
-    $params[':search_first'] = $searchValue;
-    $params[':search_middle'] = $searchValue;
-    $params[':search_last'] = $searchValue;
-    $params[':search_code'] = $searchValue;
+// Validate attendance status
+if (
+    $selectedStatus !== '' &&
+    !in_array($selectedStatus, $allowedStatuses, true)
+) {
+    $selectedStatus = '';
 }
 
-$sql .= "
-    ORDER BY
-        a.mass_date DESC,
-        a.mass_time ASC,
-        m.last_name ASC,
-        m.first_name ASC
-";
 
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$records = $stmt->fetchAll();
+// =====================================================
+// DATABASE QUERY
+// =====================================================
 
-function historyEscape($value): string {
-    return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
-}
+$records = [];
 
-function historyStatusClass($status): string {
-    return match ($status) {
-        'Present' => 'present',
-        'Late' => 'late',
-        'Absent' => 'absent',
-        'Excused' => 'excused',
-        default => ''
-    };
-}
-
-// Calculate totals for the currently filtered records.
 $totals = [
     'Present' => 0,
     'Absent' => 0,
@@ -140,11 +139,122 @@ $totals = [
     'Excused' => 0
 ];
 
-foreach ($records as $record) {
-    if (isset($totals[$record['attendance_status']])) {
-        $totals[$record['attendance_status']]++;
+$errorMessage = '';
+
+try {
+
+    $sql = "
+        SELECT
+            ma.id,
+            ma.member_id,
+            ma.mass_date,
+            ma.mass_time,
+            ma.attendance_status,
+            ma.check_in_time,
+            ma.attendance_method,
+            ma.created_at,
+
+            COALESCE(m.member_code, 'N/A') AS member_code,
+            COALESCE(m.full_name, 'Unknown Member') AS full_name
+
+        FROM public.mass_attendance ma
+
+        LEFT JOIN public.members m
+            ON m.id = ma.member_id
+
+        WHERE 1=1
+    ";
+
+    $params = [];
+
+    // Date filter: only filter when a date is selected
+    if ($selectedDate !== '') {
+
+        $sql .= "
+            AND ma.mass_date = :mass_date
+        ";
+
+        $params[':mass_date'] = $selectedDate;
     }
+
+    // Mass schedule filter
+    if ($selectedMass !== '') {
+
+        $sql .= "
+            AND ma.mass_time = :mass_time
+        ";
+
+        $params[':mass_time'] = $selectedMass;
+    }
+
+    // Attendance status filter
+    if ($selectedStatus !== '') {
+
+        $sql .= "
+            AND ma.attendance_status = :attendance_status
+        ";
+
+        $params[':attendance_status'] = $selectedStatus;
+    }
+
+    // Member search
+    if ($search !== '') {
+
+        $sql .= "
+            AND (
+                m.full_name ILIKE :search_name
+                OR m.member_code ILIKE :search_code
+            )
+        ";
+
+        $params[':search_name'] = '%' . $search . '%';
+        $params[':search_code'] = '%' . $search . '%';
+    }
+
+    // Sort attendance records
+    $sql .= "
+        ORDER BY
+            ma.mass_date DESC,
+
+            CASE ma.mass_time
+                WHEN '6:00 AM' THEN 1
+                WHEN '8:00 AM' THEN 2
+                WHEN '10:00 AM' THEN 3
+                WHEN '5:00 PM' THEN 4
+                ELSE 5
+            END,
+
+            ma.id DESC
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+
+    $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Calculate totals
+    foreach ($records as $record) {
+
+        $status = $record['attendance_status'];
+
+        if (isset($totals[$status])) {
+            $totals[$status]++;
+        }
+    }
+
+} catch (PDOException $e) {
+
+    error_log(
+        'Attendance History Error: ' . $e->getMessage()
+    );
+
+    $errorMessage = 'Unable to load attendance records. Please check your database connection and table structure.';
 }
+
+
+// =====================================================
+// PAGE DISPLAY
+// =====================================================
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/sidebar.php';
@@ -152,339 +262,644 @@ require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 
 <style>
-.main-content {
-    flex: 1;
-    min-width: 0;
-    min-height: 100vh;
-    padding: 35px;
-    background: #F8F5ED;
-    color: #172C46;
-    font-family: Inter, sans-serif;
+
+/* =====================================================
+   ATTENDANCE HISTORY
+===================================================== */
+
+.history-page {
+    padding: 25px;
+    color: #243247;
 }
 
-.heading {
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
     margin-bottom: 25px;
 }
 
-.heading h1 {
-    font: 25px Cinzel, serif;
-    margin: 0 0 8px;
+.history-header h1 {
+    font-size: 25px;
+    margin: 0 0 6px;
+    color: #172d4b;
 }
 
-.heading p {
-    font-size: 12px;
-    color: #888;
+.history-header p {
+    margin: 0;
+    color: #718096;
+    font-size: 14px;
 }
 
-.summary-grid {
+.history-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.history-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 7px;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-doc {
+    background: #244c78;
+    color: white;
+}
+
+.btn-txt {
+    background: #27734a;
+    color: white;
+}
+
+.history-btn:hover {
+    opacity: .88;
+}
+
+/* SUMMARY CARDS */
+
+.history-summary {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
-    margin-bottom: 22px;
+    gap: 15px;
+    margin-bottom: 25px;
 }
 
 .summary-card {
     background: white;
-    border: 1px solid #E9E1D3;
-    border-radius: 9px;
-    padding: 18px;
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid #e5e9ef;
+    box-shadow: 0 3px 10px rgba(0,0,0,.035);
 }
 
-.summary-card small {
-    display: block;
-    color: #999;
-    font-size: 10px;
+.summary-card .summary-label {
+    color: #718096;
+    font-size: 13px;
     margin-bottom: 10px;
 }
 
-.summary-card strong {
-    font-size: 24px;
-    color: #172C46;
+.summary-card .summary-number {
+    font-size: 28px;
+    font-weight: 700;
+    color: #172d4b;
 }
 
-.panel {
+.summary-card.present .summary-number {
+    color: #21864e;
+}
+
+.summary-card.absent .summary-number {
+    color: #c0392b;
+}
+
+.summary-card.late .summary-number {
+    color: #c58a22;
+}
+
+.summary-card.excused .summary-number {
+    color: #426a9c;
+}
+
+/* FILTER SECTION */
+
+.history-filter {
     background: white;
-    border: 1px solid #E9E1D3;
+    border: 1px solid #e5e9ef;
     border-radius: 10px;
-    padding: 22px;
-}
-
-.filters {
-    display: grid;
-    grid-template-columns: 1.5fr 1fr 1fr 1.5fr auto auto;
-    gap: 10px;
+    padding: 20px;
     margin-bottom: 20px;
 }
 
-.filters input,
-.filters select {
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 15px;
+}
+
+.filter-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #45546a;
+    margin-bottom: 7px;
+}
+
+.filter-group input,
+.filter-group select {
     width: 100%;
-    min-width: 0;
-    padding: 10px;
-    border: 1px solid #DDD5C8;
+    height: 42px;
+    padding: 8px 11px;
+    border: 1px solid #d8dee8;
     border-radius: 6px;
-    font-size: 11px;
+    background: #fff;
+    color: #26364a;
+    font-size: 13px;
+    box-sizing: border-box;
 }
 
-.btn {
-    display: inline-block;
-    padding: 10px 13px;
-    border: 0;
-    border-radius: 6px;
-    text-decoration: none;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
+.filter-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
 }
 
-.primary {
-    background: #172C46;
+.filter-submit {
+    background: #1b365d;
     color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    cursor: pointer;
+    font-weight: 600;
 }
 
-.light {
-    background: #EEEAE2;
-    color: #555;
+.filter-reset {
+    background: #edf1f5;
+    color: #34445a;
+    text-decoration: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-size: 13px;
 }
 
-.table-wrap {
+/* TABLE */
+
+.history-table-card {
+    background: white;
+    border: 1px solid #e5e9ef;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.table-heading {
+    padding: 18px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    border-bottom: 1px solid #e8edf2;
+}
+
+.table-heading h2 {
+    margin: 0;
+    font-size: 17px;
+    color: #1b365d;
+}
+
+.table-heading span {
+    font-size: 12px;
+    color: #718096;
+}
+
+.table-responsive {
+    width: 100%;
     overflow-x: auto;
 }
 
-table {
+.history-table {
     width: 100%;
     border-collapse: collapse;
     min-width: 850px;
 }
 
-th {
-    background: #F5F0E5;
+.history-table th {
+    background: #f4f6f9;
+    color: #526176;
+    padding: 13px 15px;
     text-align: left;
-    padding: 13px;
-    font-size: 10px;
-}
-
-td {
-    padding: 13px;
-    border-bottom: 1px solid #EEEAE2;
     font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
 }
 
-.status {
+.history-table td {
+    padding: 14px 15px;
+    border-bottom: 1px solid #edf0f4;
+    font-size: 13px;
+    color: #34445a;
+}
+
+.history-table tbody tr:hover {
+    background: #fafbfd;
+}
+
+.member-name {
+    font-weight: 700;
+    color: #203b60;
+}
+
+.member-code {
+    color: #7b8797;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.status-badge {
     display: inline-block;
-    padding: 5px 9px;
+    padding: 5px 10px;
     border-radius: 20px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
 }
 
-.present {
-    background: #E8F3E9;
-    color: #347343;
+.status-present {
+    background: #e3f5e9;
+    color: #21864e;
 }
 
-.late {
-    background: #FFF0DD;
-    color: #9A6928;
+.status-absent {
+    background: #fde9e7;
+    color: #bd3b31;
 }
 
-.absent {
-    background: #FCEBE8;
-    color: #A3463D;
+.status-late {
+    background: #fff3d9;
+    color: #a87515;
 }
 
-.excused {
-    background: #E9EDF5;
-    color: #405C88;
+.status-excused {
+    background: #e8effa;
+    color: #426a9c;
 }
 
-.empty {
+.empty-state {
+    padding: 45px 20px;
     text-align: center;
-    padding: 35px;
-    color: #999;
+    color: #8491a3;
 }
 
-@media(max-width:1000px) {
-    .filters {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+.empty-state h3 {
+    color: #45546a;
+    font-size: 16px;
+    margin-bottom: 6px;
+}
+
+.history-error {
+    background: #fff0ef;
+    border: 1px solid #f3c7c3;
+    color: #a52b24;
+    padding: 14px;
+    border-radius: 7px;
+    margin-bottom: 18px;
+    font-size: 13px;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 900px) {
+    .history-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .filter-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 }
 
-@media(max-width:768px) {
-    .main-content {
-        padding: 22px 15px;
+@media (max-width: 550px) {
+    .history-page {
+        padding: 14px;
     }
 
-    .summary-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    .history-summary {
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
     }
 
-    .panel {
-        padding: 15px;
+    .summary-card {
+        padding: 14px;
+    }
+
+    .summary-card .summary-number {
+        font-size: 23px;
+    }
+
+    .filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .history-actions {
+        width: 100%;
+    }
+
+    .history-btn {
+        flex: 1;
     }
 }
+
 </style>
 
-<main class="main-content">
+<div class="history-page">
 
-    <div class="heading">
-        <h1>Attendance History</h1>
-        <p>Review recorded attendance for altar servers and Sunday Mass schedules.</p>
+    <!-- PAGE HEADER -->
+
+    <div class="history-header">
+
+        <div>
+            <h1>Attendance History</h1>
+
+            <p>
+                View and export altar server attendance records.
+            </p>
+        </div>
+
+        <div class="history-actions">
+
+            <a href="export_doc.php?<?= http_build_query($_GET) ?>">
+    Download DOC
+</a>
+
+<a href="export_txt.php?<?= http_build_query($_GET) ?>">
+    Download TXT
+</a>
+
+        </div>
+
     </div>
 
-    <section class="summary-grid">
+    <!-- ERROR MESSAGE -->
 
-        <div class="summary-card">
-            <small>PRESENT</small>
-            <strong><?= $totals['Present'] ?></strong>
+    <?php if ($errorMessage !== ''): ?>
+
+        <div class="history-error">
+            <?= historyEscape($errorMessage) ?>
         </div>
 
-        <div class="summary-card">
-            <small>LATE</small>
-            <strong><?= $totals['Late'] ?></strong>
+    <?php endif; ?>
+
+    <!-- SUMMARY CARDS -->
+
+    <div class="history-summary">
+
+        <div class="summary-card present">
+            <div class="summary-label">Present</div>
+            <div class="summary-number">
+                <?= $totals['Present'] ?>
+            </div>
         </div>
 
-        <div class="summary-card">
-            <small>ABSENT</small>
-            <strong><?= $totals['Absent'] ?></strong>
+        <div class="summary-card absent">
+            <div class="summary-label">Absent</div>
+            <div class="summary-number">
+                <?= $totals['Absent'] ?>
+            </div>
         </div>
 
-        <div class="summary-card">
-            <small>EXCUSED</small>
-            <strong><?= $totals['Excused'] ?></strong>
+        <div class="summary-card late">
+            <div class="summary-label">Late</div>
+            <div class="summary-number">
+                <?= $totals['Late'] ?>
+            </div>
         </div>
 
-    </section>
+        <div class="summary-card excused">
+            <div class="summary-label">Excused</div>
+            <div class="summary-number">
+                <?= $totals['Excused'] ?>
+            </div>
+        </div>
 
-    <section class="panel">
+    </div>
 
-        <form method="GET" class="filters">
+    <!-- FILTER SECTION -->
 
-            <select name="assignment_id">
-                <option value="">All Mass Schedules</option>
+    <div class="history-filter">
 
-                <?php foreach ($schedules as $schedule): ?>
-                    <option value="<?= (int)$schedule['id'] ?>"
-                        <?= $assignmentId === (int)$schedule['id'] ? 'selected' : '' ?>>
+        <form method="GET" action="history.php">
 
-                        <?= historyEscape(date('M d, Y', strtotime($schedule['mass_date']))) ?>
-                        —
-                        <?= historyEscape(date('g:i A', strtotime($schedule['mass_time']))) ?>
+            <div class="filter-grid">
 
-                    </option>
-                <?php endforeach; ?>
+                <div class="filter-group">
 
-            </select>
+                    <label for="date">Attendance Date</label>
 
-            <input type="date" name="date"
-                value="<?= historyEscape($filterDate) ?>">
+                    <input
+    type="date"
+    id="date"
+    name="date"
+    value="<?= historyEscape($selectedDate) ?>"
+>
 
-            <select name="status">
-                <option value="">All Statuses</option>
+                </div>
 
-                <?php foreach ($allowedStatuses as $status): ?>
-                    <option value="<?= $status ?>"
-                        <?= $filterStatus === $status ? 'selected' : '' ?>>
-                        <?= $status ?>
-                    </option>
-                <?php endforeach; ?>
+                <div class="filter-group">
 
-            </select>
+                    <label for="mass_time">Mass Schedule</label>
 
-            <input type="search" name="search"
-                placeholder="Search member or code..."
-                value="<?= historyEscape($search) ?>">
+                    <select id="mass_time" name="mass_time">
 
-            <button type="submit" class="btn primary">
-                FILTER
-            </button>
+                        <option value="">All Mass Schedules</option>
 
-            <a href="history.php" class="btn light">
-                RESET
-            </a>
+                        <?php foreach ($allowedMassTimes as $time): ?>
+
+                            <option
+                                value="<?= historyEscape($time) ?>"
+                                <?= $selectedMass === $time ? 'selected' : '' ?>
+                            >
+                                <?= historyEscape($time) ?>
+                            </option>
+
+                        <?php endforeach; ?>
+
+                    </select>
+
+                </div>
+
+                <div class="filter-group">
+
+                    <label for="status">Attendance Status</label>
+
+                    <select id="status" name="status">
+
+                        <option value="">All Statuses</option>
+
+                        <?php foreach ($allowedStatuses as $status): ?>
+
+                            <option
+                                value="<?= historyEscape($status) ?>"
+                                <?= $selectedStatus === $status ? 'selected' : '' ?>
+                            >
+                                <?= historyEscape($status) ?>
+                            </option>
+
+                        <?php endforeach; ?>
+
+                    </select>
+
+                </div>
+
+                <div class="filter-group">
+
+                    <label for="search">Search Member</label>
+
+                    <input
+                        type="text"
+                        id="search"
+                        name="search"
+                        placeholder="Enter member name or code"
+                        value="<?= historyEscape($search) ?>"
+                    >
+
+                </div>
+
+            </div>
+
+            <div class="filter-buttons">
+
+                <button type="submit" class="filter-submit">
+                    Apply Filters
+                </button>
+
+                <a href="history.php" class="filter-reset">
+                    Reset
+                </a>
+
+            </div>
 
         </form>
 
-        <div class="table-wrap">
+    </div>
 
-            <table>
+    <!-- ATTENDANCE TABLE -->
+
+    <div class="history-table-card">
+
+        <div class="table-heading">
+
+            <h2>Attendance Records</h2>
+
+            <span>
+                <?= count($records) ?> record(s) found
+            </span>
+
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="history-table">
 
                 <thead>
+
                     <tr>
-                        <th>MEMBER CODE</th>
-                        <th>ALTAR SERVER</th>
-                        <th>MASS DATE</th>
-                        <th>MASS TIME</th>
-                        <th>STATUS</th>
-                        <th>CHECK-IN TIME</th>
-                        <th>METHOD</th>
+                        <th>No.</th>
+                        <th>Member Name</th>
+                        <th>Mass Date</th>
+                        <th>Mass Schedule</th>
+                        <th>Check-in Time</th>
+                        <th>Status</th>
+                        <th>Method</th>
                     </tr>
+
                 </thead>
 
                 <tbody>
 
-                <?php if ($records): ?>
+                <?php if (empty($records)): ?>
 
-                    <?php foreach ($records as $record): ?>
+                    <tr>
+                        <td colspan="7">
+
+                            <div class="empty-state">
+
+                                <h3>No Attendance Records Found</h3>
+
+                                <p>
+                                    No records match your selected date
+                                    or filters.
+                                </p>
+
+                            </div>
+
+                        </td>
+                    </tr>
+
+                <?php else: ?>
+
+                    <?php foreach ($records as $index => $record): ?>
 
                         <?php
-                        $fullName = trim(
-                            $record['first_name'] . ' ' .
-                            ($record['middle_name'] ?? '') . ' ' .
-                            $record['last_name']
-                        );
+
+                        $statusClass = match (
+                            $record['attendance_status']
+                        ) {
+                            'Present' => 'status-present',
+                            'Absent' => 'status-absent',
+                            'Late' => 'status-late',
+                            'Excused' => 'status-excused',
+                            default => ''
+                        };
+
                         ?>
 
                         <tr>
 
                             <td>
-                                <?= historyEscape($record['member_code']) ?>
+                                <?= $index + 1 ?>
                             </td>
 
                             <td>
-                                <strong><?= historyEscape($fullName) ?></strong>
+
+                                <div class="member-name">
+                                    <?= historyEscape($record['full_name']) ?>
+                                </div>
+
+                                <div class="member-code">
+                                    <?= historyEscape($record['member_code']) ?>
+                                </div>
+
                             </td>
 
                             <td>
                                 <?= historyEscape(
-                                    date('M d, Y', strtotime($record['mass_date']))
+                                    date(
+                                        'M d, Y',
+                                        strtotime($record['mass_date'])
+                                    )
                                 ) ?>
+                            </td>
+
+                            <td>
+                                <?= historyEscape($record['mass_time']) ?>
                             </td>
 
                             <td>
                                 <?= historyEscape(
-                                    date('g:i A', strtotime($record['mass_time']))
+                                    historyCheckInTime(
+                                        $record['check_in_time']
+                                    )
                                 ) ?>
                             </td>
 
                             <td>
-                                <span class="status <?= historyStatusClass($record['attendance_status']) ?>">
+
+                                <span class="status-badge <?= historyEscape($statusClass) ?>">
                                     <?= historyEscape($record['attendance_status']) ?>
                                 </span>
+
                             </td>
 
                             <td>
-                                <?= $record['check_in_time']
-                                    ? historyEscape(date('g:i A', strtotime($record['check_in_time'])))
-                                    : '—' ?>
-                            </td>
-
-                            <td>
-                                <?= historyEscape($record['attendance_method']) ?>
+                                <?= historyEscape(
+                                    $record['attendance_method'] ?: '-'
+                                ) ?>
                             </td>
 
                         </tr>
 
                     <?php endforeach; ?>
-
-                <?php else: ?>
-
-                    <tr>
-                        <td colspan="7" class="empty">
-                            No attendance records found for the selected filters.
-                        </td>
-                    </tr>
 
                 <?php endif; ?>
 
@@ -494,12 +909,10 @@ td {
 
         </div>
 
-        <p style="font-size:11px;color:#888;margin:15px 0 0">
-            Total records displayed: <?= count($records) ?>
-        </p>
+    </div>
 
-    </section>
+</div>
 
-</main>
-
-<?php require_once __DIR__ . '/../includes/footer.php'; ?>
+<?php
+// PAGE END
+?>

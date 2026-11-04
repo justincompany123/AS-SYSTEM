@@ -34,10 +34,18 @@ $currentPage = $activePage ?? '';
 
         <a
             href="/AS-SYSTEM/members/index.php"
-            class="<?= $currentPage === 'members' ? 'active' : '' ?>"
+            class="<?= in_array($currentPage, ['members', 'archived'], true) ? 'active' : '' ?>"
         >
             <span class="nav-icon">♙</span>
             <span>Members</span>
+        </a>
+
+        <a
+            href="/AS-SYSTEM/members/archived.php"
+            class="<?= $currentPage === 'archived' ? 'active' : '' ?>"
+        >
+            <span class="nav-icon">▤</span>
+            <span>Archived Members</span>
         </a>
 
         <a
