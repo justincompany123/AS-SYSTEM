@@ -11,7 +11,7 @@ $host = getenv('DB_HOST')?: 'aws-0-ap-northeast-1.pooler.supabase.com';
 $port = getenv('DB_PORT') ?: '5432';
 $dbname = getenv('DB_NAME') ?: 'postgres';
 $username = getenv('DB_USER')?: 'postgres.qqgyuovtkihvyxzylehc';
-$password = getenv('DB_PASSWORD')?: 'justin090931198455';
+$password = getenv('DB_PASSWORD')?: 'justin09157365895';
 
 // Check required configuration
 if (!$host || !$username || !$password) {
