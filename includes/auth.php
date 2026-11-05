@@ -1,4 +1,3 @@
-
 <?php
 /**
  * ALTAR SERVERS MANAGEMENT SYSTEM
