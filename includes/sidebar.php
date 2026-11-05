@@ -1,4 +1,3 @@
-
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -9,7 +8,6 @@
 */
 
 $currentPage = $activePage ?? '';
-
 ?>
 
 <aside class="sidebar" id="sidebar">
@@ -28,12 +26,11 @@ $currentPage = $activePage ?? '';
 
     </div>
 
-    <!-- MAIN MENU LABEL -->
+    <!-- MAIN MENU -->
     <div class="sidebar-section-label">
         MAIN MENU
     </div>
 
-    <!-- NAVIGATION -->
     <nav class="sidebar-nav">
 
         <!-- DASHBOARD -->
@@ -45,13 +42,22 @@ $currentPage = $activePage ?? '';
             <span>Dashboard</span>
         </a>
 
-        <!-- MEMBERS -->
+        <!-- MEMBERS LIST -->
         <a
             href="/members/index.php"
             class="<?= $currentPage === 'members' ? 'active' : '' ?>"
         >
             <span class="nav-icon">♙</span>
             <span>Members</span>
+        </a>
+
+        <!-- ADD NEW MEMBER -->
+        <a
+            href="/members/add.php"
+            class="<?= $currentPage === 'add-member' ? 'active' : '' ?>"
+        >
+            <span class="nav-icon">＋</span>
+            <span>Register New Member</span>
         </a>
 
         <!-- ARCHIVED MEMBERS -->
