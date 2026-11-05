@@ -155,7 +155,7 @@ $adminInitial = strtoupper(
                 <span>Dashboard</span>
             </a>
 
-            <a href="/members/add_members.php">
+            <a href="/members/add.php">
                 <span class="nav-icon">♙</span>
                 <span>Member Management</span>
             </a>
