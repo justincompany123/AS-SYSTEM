@@ -1,9 +1,20 @@
+
 <?php
+/*
+|--------------------------------------------------------------------------
+| ALTAR SERVERS MANAGEMENT SYSTEM
+| SIDEBAR NAVIGATION
+| ST. FRANCIS XAVIER CATHEDRAL
+|--------------------------------------------------------------------------
+*/
+
 $currentPage = $activePage ?? '';
+
 ?>
 
 <aside class="sidebar" id="sidebar">
 
+    <!-- SIDEBAR BRAND -->
     <div class="sidebar-brand">
 
         <div class="sidebar-logo">
@@ -17,46 +28,53 @@ $currentPage = $activePage ?? '';
 
     </div>
 
+    <!-- MAIN MENU LABEL -->
     <div class="sidebar-section-label">
         MAIN MENU
     </div>
 
+    <!-- NAVIGATION -->
     <nav class="sidebar-nav">
 
+        <!-- DASHBOARD -->
         <a
-            href="/AS-SYSTEM/index.php"
+            href="/index.php"
             class="<?= $currentPage === 'dashboard' ? 'active' : '' ?>"
         >
             <span class="nav-icon">⌂</span>
             <span>Dashboard</span>
         </a>
 
+        <!-- MEMBERS -->
         <a
-            href="/AS-SYSTEM/members/index.php"
-            class="<?= in_array($currentPage, ['members', 'archived'], true) ? 'active' : '' ?>"
+            href="/members/index.php"
+            class="<?= $currentPage === 'members' ? 'active' : '' ?>"
         >
             <span class="nav-icon">♙</span>
             <span>Members</span>
         </a>
 
+        <!-- ARCHIVED MEMBERS -->
         <a
-            href="/AS-SYSTEM/members/archived.php"
+            href="/members/archived.php"
             class="<?= $currentPage === 'archived' ? 'active' : '' ?>"
         >
             <span class="nav-icon">▤</span>
             <span>Archived Members</span>
         </a>
 
+        <!-- ATTENDANCE RECORDS -->
         <a
-            href="/AS-SYSTEM/attendance/index.php"
+            href="/attendance/index.php"
             class="<?= $currentPage === 'attendance' ? 'active' : '' ?>"
         >
             <span class="nav-icon">◷</span>
             <span>Attendance Records</span>
         </a>
 
+        <!-- QR ATTENDANCE SCANNER -->
         <a
-            href="/AS-SYSTEM/attendance/scan.php"
+            href="/attendance/scan.php"
             class="<?= $currentPage === 'scanner' ? 'active' : '' ?>"
         >
             <span class="nav-icon">▦</span>
@@ -65,6 +83,7 @@ $currentPage = $activePage ?? '';
 
     </nav>
 
+    <!-- SIDEBAR BOTTOM -->
     <div class="sidebar-bottom">
 
         <div class="sidebar-motto">
@@ -72,7 +91,8 @@ $currentPage = $activePage ?? '';
             <span>To Love and To Serve</span>
         </div>
 
-        <a href="/AS-SYSTEM/logout.php" class="sidebar-logout">
+        <!-- LOGOUT -->
+        <a href="/logout.php" class="sidebar-logout">
             <span class="nav-icon">↪</span>
             <span>Logout</span>
         </a>
