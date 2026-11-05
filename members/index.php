@@ -1,16 +1,11 @@
 <?php
 /*
 |--------------------------------------------------------------------------
-| ALTAR SERVERS WEB SYSTEM
+| ALTAR SERVERS MANAGEMENT SYSTEM
 | MEMBER MANAGEMENT
-| SUPABASE POSTGRESQL
 | ST. FRANCIS XAVIER CATHEDRAL
 |--------------------------------------------------------------------------
 */
-
-// =====================================================
-// AUTHENTICATION, CSRF AND DATABASE
-// =====================================================
 
 require_once __DIR__ . '/../includes/auth.php';
 requireLogin();
@@ -18,146 +13,184 @@ requireLogin();
 require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../config/database.php';
 
-// =====================================================
-// PAGE SETTINGS
-// =====================================================
-
 $pageTitle = 'Member Management';
 $activePage = 'members';
 
-// =====================================================
-// HTML ESCAPE FUNCTION
-// =====================================================
+/*
+|--------------------------------------------------------------------------
+| HTML ESCAPE
+|--------------------------------------------------------------------------
+*/
 
 function memberEscape($value): string
 {
-    return htmlspecialchars(
-        (string) ($value ?? ''),
-        ENT_QUOTES,
-        'UTF-8'
-    );
+    return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
-// =====================================================
-// SEARCH INPUT
-// =====================================================
+/*
+|--------------------------------------------------------------------------
+| SEARCH
+|--------------------------------------------------------------------------
+*/
 
-$search = '';
-
-if (
-    isset($_GET['search']) &&
-    is_string($_GET['search'])
-) {
-    $search = trim($_GET['search']);
-}
-
-// =====================================================
-// INITIALIZE VARIABLES
-// =====================================================
+$search = trim($_GET['search'] ?? '');
 
 $members = [];
-$pageError = '';
-
-$totalMembers = 0;
-
-// =====================================================
-// FETCH ACTIVE MEMBERS
-// =====================================================
+$errorMessage = '';
 
 try {
-
-    $sql = "
-        SELECT
-            id,
-            member_code,
-            full_name,
-            sex,
-            age,
-            address,
-            contact_number,
-            email,
-            status,
-            created_at
-        FROM public.members
-        WHERE status = :status
-    ";
-
-    $params = [
-        ':status' => 'Active'
-    ];
-
-    // SEARCH FILTER
-
     if ($search !== '') {
-
-        $sql .= "
-            AND (
-                member_code ILIKE :search
-                OR full_name ILIKE :search
-                OR contact_number ILIKE :search
-                OR email ILIKE :search
-            )
+        $sql = "
+            SELECT
+                id,
+                member_code,
+                full_name,
+                sex,
+                age,
+                address,
+                contact_number,
+                email,
+                status,
+                created_at
+            FROM public.members
+            WHERE status = 'Active'
+              AND (
+                    member_code ILIKE :search
+                    OR full_name ILIKE :search
+                    OR contact_number ILIKE :search
+                    OR email ILIKE :search
+              )
+            ORDER BY full_name ASC
         ";
 
-        $params[':search'] = '%' . $search . '%';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':search' => '%' . $search . '%'
+        ]);
+    } else {
+        $sql = "
+            SELECT
+                id,
+                member_code,
+                full_name,
+                sex,
+                age,
+                address,
+                contact_number,
+                email,
+                status,
+                created_at
+            FROM public.members
+            WHERE status = 'Active'
+            ORDER BY full_name ASC
+        ";
+
+        $stmt = $pdo->query($sql);
     }
-
-    // SORT MEMBERS
-
-    $sql .= "
-        ORDER BY
-            full_name ASC,
-            id ASC
-    ";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
 
     $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $totalMembers = count($members);
-
 } catch (PDOException $e) {
-
-    error_log(
-        'Member Management Error: ' . $e->getMessage()
-    );
-
-    $pageError =
-        'Unable to load member records. Please check your database connection.';
-
+    error_log('MEMBER LIST ERROR: ' . $e->getMessage());
+    $errorMessage = 'Unable to load the members list. Please try again.';
 }
 
-// =====================================================
-// SHARED HEADER
-// =====================================================
+$totalMembers = count($members);
+
+/*
+|--------------------------------------------------------------------------
+| SHARED HEADER
+|--------------------------------------------------------------------------
+*/
 
 require_once __DIR__ . '/../includes/header.php';
-
 ?>
 
 <style>
+.member-page {
+    padding: 25px;
+}
 
-/* =====================================================
-   MEMBER MANAGEMENT
-===================================================== */
+.member-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 25px;
+}
 
-.main-content {
-    padding: 30px;
-    background: #F8F5ED;
-    min-height: 100vh;
+.member-heading h1 {
+    margin: 0 0 6px;
+    color: #142b4a;
+    font-size: 27px;
+}
+
+.member-heading p {
+    margin: 0;
+    color: #718096;
+}
+
+.member-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.member-btn {
+    display: inline-block;
+    padding: 11px 17px;
+    border-radius: 7px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.member-btn-primary {
+    background: #142b4a;
+    color: #fff;
+}
+
+.member-btn-secondary {
+    background: #e9edf2;
+    color: #26384d;
+}
+
+.member-btn-danger {
+    background: #b42318;
+    color: #fff;
+}
+
+.member-summary {
+    background: #fff;
+    border: 1px solid #e5eaf0;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    max-width: 260px;
+}
+
+.member-summary span {
+    display: block;
+    color: #718096;
+    font-size: 13px;
+}
+
+.member-summary strong {
+    display: block;
+    color: #142b4a;
+    font-size: 28px;
+    margin-top: 5px;
 }
 
 .member-panel {
-    background: #FFFFFF;
-    border: 1px solid #E9E1D3;
+    background: #fff;
+    border: 1px solid #e5eaf0;
     border-radius: 10px;
-    padding: 22px;
+    padding: 20px;
 }
-
-/* =====================================================
-   TOOLBAR
-===================================================== */
 
 .member-toolbar {
     display: flex;
@@ -165,7 +198,7 @@ require_once __DIR__ . '/../includes/header.php';
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
 }
 
 .member-search {
@@ -175,86 +208,13 @@ require_once __DIR__ . '/../includes/header.php';
 }
 
 .member-search input {
-    padding: 10px 12px;
-    border: 1px solid #DDD5C8;
-    border-radius: 6px;
-    min-width: 240px;
-    font-family: inherit;
+    width: 280px;
+    max-width: 100%;
+    padding: 11px 13px;
+    border: 1px solid #d7dee8;
+    border-radius: 7px;
+    font-size: 14px;
 }
-
-.member-search input:focus {
-    outline: none;
-    border-color: #B18A43;
-    box-shadow: 0 0 0 2px rgba(177, 138, 67, 0.12);
-}
-
-/* =====================================================
-   BUTTONS
-===================================================== */
-
-.member-btn {
-    display: inline-block;
-    padding: 10px 14px;
-    border-radius: 6px;
-    text-decoration: none;
-    font-size: 12px;
-    font-weight: 600;
-    border: none;
-    cursor: pointer;
-    text-align: center;
-    font-family: inherit;
-    transition: 0.2s ease;
-}
-
-.member-btn-primary {
-    background: #172C46;
-    color: #FFFFFF;
-}
-
-.member-btn-primary:hover {
-    background: #243F60;
-}
-
-.member-btn-gold {
-    background: #B18A43;
-    color: #FFFFFF;
-}
-
-.member-btn-gold:hover {
-    background: #947033;
-}
-
-.member-btn-danger {
-    background: #A94336;
-    color: #FFFFFF;
-}
-
-.member-btn-danger:hover {
-    background: #873328;
-}
-
-.member-btn-light {
-    background: #EEEAE2;
-    color: #555555;
-}
-
-.member-btn-light:hover {
-    background: #DED8CC;
-}
-
-.member-btn:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
-
-.member-btn-small {
-    padding: 7px 10px;
-    font-size: 10px;
-}
-
-/* =====================================================
-   MEMBER TABLE
-===================================================== */
 
 .member-table-wrap {
     width: 100%;
@@ -264,152 +224,76 @@ require_once __DIR__ . '/../includes/header.php';
 .member-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    min-width: 850px;
 }
 
 .member-table th,
 .member-table td {
-    padding: 13px 10px;
+    padding: 13px 12px;
     text-align: left;
-    border-bottom: 1px solid #EEE7DA;
-    white-space: nowrap;
+    border-bottom: 1px solid #edf0f4;
+    font-size: 13px;
 }
 
 .member-table th {
-    color: #7B6A50;
-    background: #FBF9F4;
+    background: #f5f7fa;
+    color: #526174;
     font-weight: 700;
 }
 
-.member-table tbody tr:hover {
-    background: #FCFAF5;
+.member-table td {
+    color: #344054;
 }
 
-.member-table input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    accent-color: #172C46;
+.member-table tr:hover td {
+    background: #fafbfd;
 }
-
-/* =====================================================
-   STATUS
-===================================================== */
 
 .member-status {
     display: inline-block;
-    padding: 5px 9px;
+    padding: 5px 10px;
     border-radius: 20px;
-    font-size: 10px;
-    font-weight: 600;
-    background: #EAF4EA;
-    color: #34713B;
-}
-
-/* =====================================================
-   MESSAGES
-===================================================== */
-
-.empty-row {
-    text-align: center !important;
-    padding: 35px !important;
-    color: #888888;
-}
-
-.member-error {
-    background: #FFF0ED;
-    border: 1px solid #EAC8C2;
-    color: #A12E25;
-    padding: 13px;
-    border-radius: 6px;
-    margin-bottom: 18px;
-}
-
-.member-success {
-    background: #EAF4EA;
-    border: 1px solid #C9E2C9;
-    color: #34713B;
-    padding: 13px;
-    border-radius: 6px;
-    margin-bottom: 18px;
-}
-
-/* =====================================================
-   MEMBER COUNT
-===================================================== */
-
-.member-count {
-    font-size: 11px;
-    color: #888888;
-    margin-top: 16px;
-}
-
-/* =====================================================
-   BULK ARCHIVE
-===================================================== */
-
-.bulk-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    background: #FBF9F4;
-    border: 1px solid #EEE7DA;
-    border-radius: 7px;
-    padding: 12px;
-    margin-bottom: 15px;
-}
-
-.bulk-toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.select-all-label {
-    display: flex;
-    align-items: center;
-    gap: 7px;
+    background: #e7f6ec;
+    color: #18723a;
     font-size: 12px;
-    color: #5D5140;
-    cursor: pointer;
+    font-weight: 700;
 }
 
-.member-message {
-    font-size: 11px;
-    color: #777777;
+.member-link {
+    color: #174a7e;
+    text-decoration: none;
+    font-weight: 600;
 }
 
-/* =====================================================
-   RESPONSIVE DESIGN
-===================================================== */
-
-@media (max-width: 768px) {
-
-    .main-content {
-        padding: 20px 15px;
-    }
-
-    .member-panel {
-        padding: 16px;
-    }
-
-    .member-toolbar {
-        align-items: stretch;
-    }
-
+.member-link:hover {
+    text-decoration: underline;
 }
 
-@media (max-width: 600px) {
+.member-empty {
+    text-align: center;
+    padding: 35px 15px;
+    color: #718096;
+}
 
-    .main-content {
-        padding: 18px 12px;
-    }
+.member-alert {
+    padding: 13px 15px;
+    border-radius: 7px;
+    margin-bottom: 18px;
+    background: #fff0f0;
+    color: #a12626;
+}
 
-    .member-panel {
+.member-bulk-form {
+    display: inline;
+}
+
+@media (max-width: 700px) {
+    .member-page {
         padding: 15px;
+    }
+
+    .member-heading {
+        align-items: flex-start;
     }
 
     .member-search {
@@ -418,547 +302,299 @@ require_once __DIR__ . '/../includes/header.php';
 
     .member-search input {
         width: 100%;
-        min-width: 0;
     }
 
-    .member-toolbar {
-        flex-direction: column;
-        align-items: stretch;
+    .member-panel {
+        padding: 13px;
     }
-
-    .member-toolbar > div {
-        width: 100%;
-    }
-
-    .member-toolbar > div .member-btn {
-        flex: 1;
-    }
-
-    .bulk-toolbar {
-        align-items: stretch;
-    }
-
-    .bulk-toolbar-left {
-        justify-content: space-between;
-    }
-
 }
-
 </style>
 
-<!-- =====================================================
-     MAIN CONTENT
-===================================================== -->
+<main class="member-page">
 
-<main class="main-content">
-
-    <!-- PAGE HEADING -->
-
-    <div class="page-heading">
+    <div class="member-heading">
 
         <div>
+            <h1>Member Management</h1>
+            <p>View and manage the registered altar servers.</p>
+        </div>
 
-            <span style="
-                color:#B18A43;
-                font-size:10px;
-                font-weight:700;
-                letter-spacing:2px;
-            ">
-                MINISTRY RECORDS
-            </span>
+        <div class="member-actions">
 
-            <h1>
-                Member Management
-            </h1>
+            <a href="/members/archived.php"
+               class="member-btn member-btn-secondary">
+                Archived Members
+            </a>
 
-            <p>
-                Register and manage altar server members
-                and their permanent QR codes.
-            </p>
+            <a href="/members/add.php"
+               class="member-btn member-btn-primary">
+                + Register New Member
+            </a>
 
         </div>
 
     </div>
 
-    <!-- ERROR MESSAGE -->
+    <div class="member-summary">
+        <span>Active Members</span>
+        <strong><?= number_format($totalMembers) ?></strong>
+    </div>
 
-    <?php if ($pageError !== ''): ?>
-
-        <div class="member-error">
-            <?= memberEscape($pageError) ?>
+    <?php if ($errorMessage !== ''): ?>
+        <div class="member-alert">
+            <?= memberEscape($errorMessage) ?>
         </div>
-
     <?php endif; ?>
-
-    <!-- SUCCESS MESSAGE -->
-
-    <?php if (
-        isset($_GET['message']) &&
-        is_string($_GET['message'])
-    ): ?>
-
-        <div class="member-success">
-            <?= memberEscape($_GET['message']) ?>
-        </div>
-
-    <?php endif; ?>
-
-    <!-- MEMBER PANEL -->
 
     <section class="member-panel">
 
-        <!-- TOOLBAR -->
-
         <div class="member-toolbar">
 
-            <!-- SEARCH FORM -->
+            <div>
+                <h2 style="margin:0; color:#142b4a;">
+                    Registered Members
+                </h2>
+                <p style="margin:5px 0 0; color:#718096; font-size:13px;">
+                    List of active members in the ministry.
+                </p>
+            </div>
 
-            <form
-                method="GET"
-                action="/members/index.php"
-                class="member-search"
-            >
+            <form method="GET"
+                  action="/members/index.php"
+                  class="member-search">
 
                 <input
                     type="search"
                     name="search"
-                    placeholder="Search member name or code..."
+                    placeholder="Search name, code, contact..."
                     value="<?= memberEscape($search) ?>"
-                    aria-label="Search active members"
                 >
 
-                <button
-                    type="submit"
-                    class="member-btn member-btn-primary"
-                >
-                    SEARCH
+                <button type="submit"
+                        class="member-btn member-btn-primary">
+                    Search
                 </button>
 
-                <a
-                    href="/members/index.php"
-                    class="member-btn member-btn-light"
-                >
-                    RESET
-                </a>
+                <?php if ($search !== ''): ?>
+                    <a href="/members/index.php"
+                       class="member-btn member-btn-secondary">
+                        Clear
+                    </a>
+                <?php endif; ?>
 
             </form>
 
-            <!-- PAGE ACTIONS -->
-
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-
-                <a
-                    href="/members/archived.php"
-                    class="member-btn member-btn-light"
-                >
-                    VIEW ARCHIVED MEMBERS
-                </a>
-
-                <a
-                    href="/members/add.php"
-                    class="member-btn member-btn-gold"
-                >
-                    + REGISTER MEMBER
-                </a>
-
-            </div>
-
         </div>
 
-        <!-- =================================================
-             BULK ARCHIVE FORM
-        ================================================== -->
+        <?php if (!$errorMessage): ?>
 
-        <form
-            id="bulkArchiveForm"
-            method="POST"
-            action="/members/archive.php"
-            onsubmit="return confirmBulkArchive();"
-        >
+            <form method="POST"
+                  action="/members/archive.php"
+                  id="bulkArchiveForm"
+                  onsubmit="return confirm('Archive the selected members?');">
 
-            <?= csrfField() ?>
+                <?= csrfField() ?>
 
-        </form>
+                <div style="margin-bottom:15px;">
+                    <button type="submit"
+                            class="member-btn member-btn-danger"
+                            id="archiveSelectedButton"
+                            disabled>
+                        Archive Selected
+                    </button>
+                </div>
 
-        <!-- BULK TOOLBAR -->
+                <div class="member-table-wrap">
 
-        <div class="bulk-toolbar">
+                    <table class="member-table">
 
-            <div class="bulk-toolbar-left">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <input type="checkbox"
+                                           id="selectAll"
+                                           aria-label="Select all members">
+                                </th>
+                                <th>Member Code</th>
+                                <th>Full Name</th>
+                                <th>Sex</th>
+                                <th>Age</th>
+                                <th>Contact Number</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
 
-                <label class="select-all-label">
+                        <tbody>
 
-                    <input
-                        type="checkbox"
-                        id="selectAllMembers"
-                    >
-
-                    <strong>
-                        Select All
-                    </strong>
-
-                </label>
-
-                <span
-                    class="member-message"
-                    id="selectedCount"
-                >
-                    0 members selected
-                </span>
-
-            </div>
-
-            <button
-                type="submit"
-                form="bulkArchiveForm"
-                class="member-btn member-btn-danger"
-                id="archiveSelectedButton"
-                disabled
-            >
-                ARCHIVE SELECTED
-            </button>
-
-        </div>
-
-        <!-- =================================================
-             MEMBER TABLE
-        ================================================== -->
-
-        <div class="member-table-wrap">
-
-            <table class="member-table">
-
-                <thead>
-
-                    <tr>
-
-                        <th>Select</th>
-                        <th>Member Code</th>
-                        <th>Full Name</th>
-                        <th>Sex</th>
-                        <th>Age</th>
-                        <th>Contact Number</th>
-                        <th>Status</th>
-                        <th>Registered</th>
-                        <th>QR Card</th>
-                        <th>Action</th>
-
-                    </tr>
-
-                </thead>
-
-                <tbody>
-
-                    <?php if (!empty($members)): ?>
-
-                        <?php foreach ($members as $member): ?>
+                        <?php if (empty($members)): ?>
 
                             <tr>
-
-                                <!-- CHECKBOX -->
-
-                                <td>
-
-                                    <input
-                                        type="checkbox"
-                                        class="member-checkbox"
-                                        name="member_ids[]"
-                                        value="<?= (int) $member['id'] ?>"
-                                        form="bulkArchiveForm"
-                                        aria-label="Select member"
-                                    >
-
+                                <td colspan="9" class="member-empty">
+                                    <?php if ($search !== ''): ?>
+                                        No members found matching
+                                        "<?= memberEscape($search) ?>".
+                                    <?php else: ?>
+                                        No active members found.
+                                        Register a new member to get started.
+                                    <?php endif; ?>
                                 </td>
-
-                                <!-- MEMBER CODE -->
-
-                                <td>
-
-                                    <strong>
-                                        <?= memberEscape(
-                                            $member['member_code']
-                                        ) ?>
-                                    </strong>
-
-                                </td>
-
-                                <!-- FULL NAME -->
-
-                                <td>
-                                    <?= memberEscape(
-                                        $member['full_name']
-                                    ) ?>
-                                </td>
-
-                                <!-- SEX -->
-
-                                <td>
-                                    <?= memberEscape(
-                                        $member['sex']
-                                    ) ?>
-                                </td>
-
-                                <!-- AGE -->
-
-                                <td>
-                                    <?= memberEscape(
-                                        $member['age'] ?? '—'
-                                    ) ?>
-                                </td>
-
-                                <!-- CONTACT -->
-
-                                <td>
-                                    <?= memberEscape(
-                                        $member['contact_number'] ?: '—'
-                                    ) ?>
-                                </td>
-
-                                <!-- STATUS -->
-
-                                <td>
-
-                                    <span class="member-status">
-                                        <?= memberEscape(
-                                            $member['status']
-                                        ) ?>
-                                    </span>
-
-                                </td>
-
-                                <!-- REGISTRATION DATE -->
-
-                                <td>
-
-                                    <?php
-
-                                    if (!empty($member['created_at'])) {
-
-                                        $timestamp = strtotime(
-                                            $member['created_at']
-                                        );
-
-                                        echo $timestamp !== false
-                                            ? memberEscape(
-                                                date('M d, Y', $timestamp)
-                                            )
-                                            : '—';
-
-                                    } else {
-
-                                        echo '—';
-
-                                    }
-
-                                    ?>
-
-                                </td>
-
-                                <!-- QR CARD -->
-
-                                <td>
-
-                                    <a
-                                        class="member-btn member-btn-primary member-btn-small"
-                                        href="/members/qr_card.php?id=<?= (int) $member['id'] ?>"
-                                        target="_blank"
-                                        rel="noopener"
-                                    >
-                                        VIEW QR CARD
-                                    </a>
-
-                                </td>
-
-                                <!-- ARCHIVE ACTION -->
-
-                                <td>
-
-                                    <form
-                                        method="POST"
-                                        action="/members/archive.php"
-                                        onsubmit="return confirm('Are you sure you want to archive this member?');"
-                                    >
-
-                                        <?= csrfField() ?>
-
-                                        <input
-                                            type="hidden"
-                                            name="member_id"
-                                            value="<?= (int) $member['id'] ?>"
-                                        >
-
-                                        <button
-                                            type="submit"
-                                            class="member-btn member-btn-danger member-btn-small"
-                                        >
-                                            ARCHIVE
-                                        </button>
-
-                                    </form>
-
-                                </td>
-
                             </tr>
 
-                        <?php endforeach; ?>
+                        <?php else: ?>
 
-                    <?php else: ?>
+                            <?php foreach ($members as $member): ?>
 
-                        <tr>
+                                <tr>
 
-                            <td
-                                colspan="10"
-                                class="empty-row"
-                            >
+                                    <td>
+                                        <input
+                                            type="checkbox"
+                                            class="member-checkbox"
+                                            name="member_ids[]"
+                                            value="<?= (int)$member['id'] ?>"
+                                            aria-label="Select member"
+                                        >
+                                    </td>
 
-                                <?php if ($search !== ''): ?>
+                                    <td>
+                                        <?= memberEscape($member['member_code']) ?>
+                                    </td>
 
-                                    No active members found matching
-                                    "<?= memberEscape($search) ?>".
+                                    <td>
+                                        <strong>
+                                            <?= memberEscape($member['full_name']) ?>
+                                        </strong>
+                                    </td>
 
-                                <?php else: ?>
+                                    <td>
+                                        <?= memberEscape($member['sex']) ?>
+                                    </td>
 
-                                    No active members registered yet.
+                                    <td>
+                                        <?= memberEscape($member['age']) ?>
+                                    </td>
 
-                                <?php endif; ?>
+                                    <td>
+                                        <?= memberEscape($member['contact_number']) ?>
+                                    </td>
 
-                            </td>
+                                    <td>
+                                        <?= memberEscape($member['email']) ?>
+                                    </td>
 
-                        </tr>
+                                    <td>
+                                        <span class="member-status">
+                                            <?= memberEscape($member['status']) ?>
+                                        </span>
+                                    </td>
 
-                    <?php endif; ?>
+                                    <td>
+                                        <a
+                                            class="member-link"
+                                            href="/members/qr_card.php?id=<?= (int)$member['id'] ?>"
+                                        >
+                                            View QR
+                                        </a>
 
-                </tbody>
+                                        <span style="color:#b8c0cc;"> | </span>
 
-            </table>
+                                        <button
+                                            type="button"
+                                            class="member-link"
+                                            style="background:none;border:0;cursor:pointer;"
+                                            onclick="archiveOneMember(<?= (int)$member['id'] ?>)"
+                                        >
+                                            Archive
+                                        </button>
+                                    </td>
 
-        </div>
+                                </tr>
 
-        <!-- MEMBER COUNT -->
+                            <?php endforeach; ?>
 
-        <p class="member-count">
+                        <?php endif; ?>
 
-            Total active records:
+                        </tbody>
 
-            <strong>
-                <?= number_format($totalMembers) ?>
-            </strong>
+                    </table>
 
-        </p>
+                </div>
+
+            </form>
+
+            <!-- Individual archive form -->
+            <form method="POST"
+                  action="/members/archive.php"
+                  id="singleArchiveForm"
+                  style="display:none;">
+
+                <?= csrfField() ?>
+
+                <input type="hidden"
+                       name="member_id"
+                       id="singleArchiveMemberId">
+
+            </form>
+
+        <?php endif; ?>
 
     </section>
 
 </main>
 
-<!-- =====================================================
-     JAVASCRIPT: SELECT ALL AND BULK ARCHIVE
-===================================================== -->
-
 <script>
+const selectAll = document.getElementById('selectAll');
+const memberCheckboxes = document.querySelectorAll('.member-checkbox');
+const archiveSelectedButton = document.getElementById('archiveSelectedButton');
 
-document.addEventListener('DOMContentLoaded', function () {
+function updateArchiveButton() {
+    if (!archiveSelectedButton) return;
 
-    const selectAll = document.getElementById(
-        'selectAllMembers'
-    );
-
-    const checkboxes = document.querySelectorAll(
-        '.member-checkbox'
-    );
-
-    const selectedCount = document.getElementById(
-        'selectedCount'
-    );
-
-    const archiveButton = document.getElementById(
-        'archiveSelectedButton'
-    );
-
-    function updateSelection() {
-
-        const checkedBoxes = document.querySelectorAll(
-            '.member-checkbox:checked'
-        );
-
-        const total = checkedBoxes.length;
-
-        selectedCount.textContent =
-            total +
-            (total === 1
-                ? ' member selected'
-                : ' members selected'
-            );
-
-        archiveButton.disabled = total === 0;
-
-        selectAll.checked =
-            checkboxes.length > 0 &&
-            total === checkboxes.length;
-
-        selectAll.indeterminate =
-            total > 0 &&
-            total < checkboxes.length;
-    }
-
-    // SELECT ALL
-
-    selectAll.addEventListener('change', function () {
-
-        checkboxes.forEach(function (checkbox) {
-
-            checkbox.checked = selectAll.checked;
-
-        });
-
-        updateSelection();
-
-    });
-
-    // INDIVIDUAL CHECKBOXES
-
-    checkboxes.forEach(function (checkbox) {
-
-        checkbox.addEventListener(
-            'change',
-            updateSelection
-        );
-
-    });
-
-    updateSelection();
-
-});
-
-// CONFIRM BULK ARCHIVE
-
-function confirmBulkArchive() {
-
-    const selected = document.querySelectorAll(
+    const selectedCount = document.querySelectorAll(
         '.member-checkbox:checked'
     ).length;
 
-    if (selected === 0) {
-
-        alert('Please select at least one member.');
-
-        return false;
-    }
-
-    return confirm(
-        'Are you sure you want to archive ' +
-        selected +
-        ' selected member(s)?'
-    );
+    archiveSelectedButton.disabled = selectedCount === 0;
+    archiveSelectedButton.textContent = selectedCount > 0
+        ? 'Archive Selected (' + selectedCount + ')'
+        : 'Archive Selected';
 }
 
+if (selectAll) {
+    selectAll.addEventListener('change', function () {
+        memberCheckboxes.forEach(function (checkbox) {
+            checkbox.checked = selectAll.checked;
+        });
+
+        updateArchiveButton();
+    });
+}
+
+memberCheckboxes.forEach(function (checkbox) {
+    checkbox.addEventListener('change', function () {
+        if (selectAll) {
+            selectAll.checked =
+                memberCheckboxes.length > 0 &&
+                document.querySelectorAll('.member-checkbox:checked').length
+                    === memberCheckboxes.length;
+        }
+
+        updateArchiveButton();
+    });
+});
+
+function archiveOneMember(memberId) {
+    if (!confirm('Are you sure you want to archive this member?')) {
+        return;
+    }
+
+    document.getElementById('singleArchiveMemberId').value = memberId;
+    document.getElementById('singleArchiveForm').submit();
+}
 </script>
 
 <?php
-
-// =====================================================
-// SHARED FOOTER
-// =====================================================
-
 require_once __DIR__ . '/../includes/footer.php';
-
 ?>

@@ -1,140 +1,181 @@
 <?php
 /*
 |--------------------------------------------------------------------------
-| ALTAR SERVERS WEB SYSTEM
-| ADD NEW MEMBER - SUPABASE POSTGRESQL
-| St. Francis Xavier Cathedral
+| ALTAR SERVERS MANAGEMENT SYSTEM
+| ADD NEW MEMBER
+| ST. FRANCIS XAVIER CATHEDRAL
 |--------------------------------------------------------------------------
 */
 
 require_once __DIR__ . '/../includes/auth.php';
 requireLogin();
 
-require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/csrf.php';
+require_once __DIR__ . '/../config/database.php';
 
 $pageTitle = 'Add New Member';
-$activePage = 'members';
+$activePage = 'add-member';
 
-$errors = [];
+/*
+|--------------------------------------------------------------------------
+| HTML ESCAPE
+|--------------------------------------------------------------------------
+*/
+
+function addEscape($value): string
+{
+    return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
+}
+
+/*
+|--------------------------------------------------------------------------
+| FORM VALUES
+|--------------------------------------------------------------------------
+*/
 
 $firstName = '';
 $middleName = '';
 $lastName = '';
-$birthDate = '';
 $sex = '';
+$birthDate = '';
 $address = '';
 $contactNumber = '';
 $email = '';
-$memberStatus = 'Active';
+$status = 'Active';
+
+$errors = [];
 
 /*
 |--------------------------------------------------------------------------
-| FORM SUBMISSION
+| PROCESS FORM
 |--------------------------------------------------------------------------
 */
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    requireValidCSRFToken();
+    /*
+    |--------------------------------------------------------------------------
+    | CSRF VALIDATION
+    |--------------------------------------------------------------------------
+    */
 
-    $firstName = trim($_POST['first_name'] ?? '');
-    $middleName = trim($_POST['middle_name'] ?? '');
-    $lastName = trim($_POST['last_name'] ?? '');
-    $birthDate = trim($_POST['birth_date'] ?? '');
-    $sex = trim($_POST['sex'] ?? '');
-    $address = trim($_POST['address'] ?? '');
-    $contactNumber = trim($_POST['contact_number'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $memberStatus = trim($_POST['member_status'] ?? 'Active');
+    $submittedToken = $_POST['csrf_token'] ?? '';
+    $sessionToken = $_SESSION['csrf_token'] ?? '';
 
-    // Validate first name
-    if ($firstName === '' || strlen($firstName) > 100) {
-        $errors[] = 'First name is required and must not exceed 100 characters.';
-    }
-
-    // Validate middle name
-    if (strlen($middleName) > 100) {
-        $errors[] = 'Middle name must not exceed 100 characters.';
-    }
-
-    // Validate last name
-    if ($lastName === '' || strlen($lastName) > 100) {
-        $errors[] = 'Last name is required and must not exceed 100 characters.';
-    }
-
-    // Validate sex
-    if (!in_array($sex, ['Male', 'Female'], true)) {
-        $errors[] = 'Please select a valid sex.';
-    }
-
-    // Validate birth date and calculate age
-    $age = null;
-
-    if ($birthDate !== '') {
-
-        $date = DateTime::createFromFormat('!Y-m-d', $birthDate);
-
-        if (!$date || $date->format('Y-m-d') !== $birthDate) {
-            $errors[] = 'Please enter a valid birth date.';
-        } elseif ($birthDate > date('Y-m-d')) {
-            $errors[] = 'Birth date cannot be in the future.';
-        } else {
-            $today = new DateTime('today');
-            $age = $date->diff($today)->y;
-        }
-    }
-
-    // Validate address
-    if (strlen($address) > 255) {
-        $errors[] = 'Address must not exceed 255 characters.';
-    }
-
-    // Validate contact number
-    if (strlen($contactNumber) > 30) {
-        $errors[] = 'Contact number must not exceed 30 characters.';
-    }
-
-    // Validate email
-    if (strlen($email) > 150) {
-        $errors[] = 'Email must not exceed 150 characters.';
-    } elseif ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'Please enter a valid email address.';
-    }
-
-    // Validate status
-    if (!in_array($memberStatus, ['Active', 'Inactive'], true)) {
-        $errors[] = 'Invalid member status.';
+    if (
+        !is_string($submittedToken) ||
+        !is_string($sessionToken) ||
+        $sessionToken === '' ||
+        !hash_equals($sessionToken, $submittedToken)
+    ) {
+        $errors[] = 'Your form session has expired. Please refresh the page and try again.';
     }
 
     /*
     |--------------------------------------------------------------------------
-    | REGISTER MEMBER
+    | GET FORM DATA
+    |--------------------------------------------------------------------------
+    */
+
+    $firstName = trim($_POST['first_name'] ?? '');
+    $middleName = trim($_POST['middle_name'] ?? '');
+    $lastName = trim($_POST['last_name'] ?? '');
+    $sex = trim($_POST['sex'] ?? '');
+    $birthDate = trim($_POST['birth_date'] ?? '');
+    $address = trim($_POST['address'] ?? '');
+    $contactNumber = trim($_POST['contact_number'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $status = trim($_POST['status'] ?? 'Active');
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDATION
+    |--------------------------------------------------------------------------
+    */
+
+    if ($firstName === '') {
+        $errors[] = 'First name is required.';
+    } elseif (mb_strlen($firstName) > 100) {
+        $errors[] = 'First name must not exceed 100 characters.';
+    }
+
+    if (mb_strlen($middleName) > 100) {
+        $errors[] = 'Middle name must not exceed 100 characters.';
+    }
+
+    if ($lastName === '') {
+        $errors[] = 'Last name is required.';
+    } elseif (mb_strlen($lastName) > 100) {
+        $errors[] = 'Last name must not exceed 100 characters.';
+    }
+
+    if (!in_array($sex, ['Male', 'Female'], true)) {
+        $errors[] = 'Please select a valid sex.';
+    }
+
+    $dateObject = DateTime::createFromFormat('!Y-m-d', $birthDate);
+    $dateErrors = DateTime::getLastErrors();
+
+    $validBirthDate =
+        $dateObject !== false &&
+        $dateObject->format('Y-m-d') === $birthDate &&
+        ($dateErrors === false ||
+            ($dateErrors['warning_count'] === 0 &&
+             $dateErrors['error_count'] === 0));
+
+    if (!$validBirthDate) {
+        $errors[] = 'Please enter a valid birth date.';
+    } elseif ($dateObject > new DateTime('today')) {
+        $errors[] = 'Birth date cannot be in the future.';
+    }
+
+    if ($address === '') {
+        $errors[] = 'Address is required.';
+    } elseif (mb_strlen($address) > 255) {
+        $errors[] = 'Address must not exceed 255 characters.';
+    }
+
+    if (mb_strlen($contactNumber) > 30) {
+        $errors[] = 'Contact number must not exceed 30 characters.';
+    }
+
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Please enter a valid email address.';
+    }
+
+    if (mb_strlen($email) > 150) {
+        $errors[] = 'Email must not exceed 150 characters.';
+    }
+
+    if (!in_array($status, ['Active', 'Inactive'], true)) {
+        $errors[] = 'Please select a valid member status.';
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | INSERT MEMBER
     |--------------------------------------------------------------------------
     */
 
     if (empty($errors)) {
 
+        $fullName = trim(
+            $firstName . ' ' .
+            ($middleName !== '' ? $middleName . ' ' : '') .
+            $lastName
+        );
+
+        $today = new DateTime('today');
+        $age = $dateObject->diff($today)->y;
+
+        $memberCode = 'AS-' . date('Ymd') . '-' .
+            strtoupper(bin2hex(random_bytes(3)));
+
+        $qrToken = bin2hex(random_bytes(32));
+
         try {
 
-            $pdo->beginTransaction();
-
-            // Generate unique member code
-            $memberCode = 'AS-' . date('Ymd') . '-' .
-                strtoupper(bin2hex(random_bytes(3)));
-
-            // Generate permanent QR security token
-            $qrToken = bin2hex(random_bytes(32));
-
-            // Combine names
-            $fullName = trim(
-                $firstName . ' ' .
-                ($middleName !== '' ? $middleName . ' ' : '') .
-                $lastName
-            );
-
-            // Insert member into Supabase PostgreSQL
-            $stmt = $pdo->prepare("
+            $sql = "
                 INSERT INTO public.members (
                     member_code,
                     full_name,
@@ -160,372 +201,375 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     :qr_token
                 )
                 RETURNING id
-            ");
+            ";
+
+            $stmt = $pdo->prepare($sql);
 
             $stmt->execute([
                 ':member_code' => $memberCode,
                 ':full_name' => $fullName,
                 ':sex' => $sex,
                 ':age' => $age,
-                ':birth_date' => $birthDate !== '' ? $birthDate : null,
-                ':address' => $address !== '' ? $address : null,
-                ':contact_number' => $contactNumber !== '' ? $contactNumber : null,
-                ':email' => $email !== '' ? $email : null,
-                ':status' => $memberStatus,
+                ':birth_date' => $birthDate,
+                ':address' => $address,
+                ':contact_number' => $contactNumber !== ''
+                    ? $contactNumber
+                    : null,
+                ':email' => $email !== ''
+                    ? $email
+                    : null,
+                ':status' => $status,
                 ':qr_token' => $qrToken
             ]);
 
-            $newMemberId = (int) $stmt->fetchColumn();
+            $newMemberId = $stmt->fetchColumn();
 
-            $pdo->commit();
+            if (!$newMemberId) {
+                throw new RuntimeException('Member ID was not returned.');
+            }
 
-            // Redirect to QR identification card
             header(
-                'Location: qr_card.php?id=' .
-                $newMemberId .
+                'Location: /members/qr_card.php?id=' .
+                urlencode((string)$newMemberId) .
                 '&created=1'
             );
-
             exit;
 
         } catch (Throwable $e) {
 
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
+            error_log('ADD MEMBER ERROR: ' . $e->getMessage());
 
-            error_log(
-                'Member registration error: ' . $e->getMessage()
-            );
-
-            $errors[] = 'Unable to register member. Please check the database structure and try again.';
+            $errors[] = 'Unable to register this member. Please check the database and try again.';
         }
     }
 }
 
 /*
 |--------------------------------------------------------------------------
-| HTML ESCAPE FUNCTION
-|--------------------------------------------------------------------------
-*/
-
-function addEscape($value): string
-{
-    return htmlspecialchars(
-        (string) ($value ?? ''),
-        ENT_QUOTES,
-        'UTF-8'
-    );
-}
-
-/*
-|--------------------------------------------------------------------------
-| SHARED HEADER AND SIDEBAR
+| SHARED HEADER
 |--------------------------------------------------------------------------
 */
 
 require_once __DIR__ . '/../includes/header.php';
-
 ?>
 
-<!-- =====================================================
-     ADD MEMBER PAGE
-===================================================== -->
+<style>
+.add-member-page {
+    padding: 25px;
+}
 
-<main class="main-content">
+.add-member-heading {
+    margin-bottom: 22px;
+}
 
-    <div class="content-container">
+.add-member-heading h1 {
+    margin: 0 0 6px;
+    color: #142b4a;
+    font-size: 27px;
+}
 
-        <!-- PAGE HEADING -->
+.add-member-heading p {
+    margin: 0;
+    color: #718096;
+}
 
-        <div class="page-heading">
+.add-member-card {
+    max-width: 950px;
+    background: #fff;
+    border: 1px solid #e5eaf0;
+    border-radius: 10px;
+    padding: 25px;
+}
 
-            <div>
-                <span class="page-eyebrow">
-                    MEMBER MANAGEMENT
-                </span>
+.add-member-card h2 {
+    margin: 0 0 20px;
+    color: #142b4a;
+    font-size: 19px;
+}
 
-                <h1>Register New Member</h1>
+.add-member-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
 
-                <p>
-                    Add a new altar server to the ministry records.
-                </p>
+.add-member-field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.add-member-field.full {
+    grid-column: 1 / -1;
+}
+
+.add-member-field label {
+    color: #344054;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.add-member-field input,
+.add-member-field select,
+.add-member-field textarea {
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid #d7dee8;
+    border-radius: 7px;
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.add-member-field textarea {
+    min-height: 85px;
+    resize: vertical;
+}
+
+.add-member-field input:focus,
+.add-member-field select:focus,
+.add-member-field textarea:focus {
+    outline: none;
+    border-color: #174a7e;
+    box-shadow: 0 0 0 3px rgba(23, 74, 126, 0.10);
+}
+
+.add-member-help {
+    color: #8491a3;
+    font-size: 12px;
+}
+
+.add-member-errors {
+    background: #fff0f0;
+    border: 1px solid #f3caca;
+    color: #a12626;
+    border-radius: 7px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+}
+
+.add-member-errors ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+}
+
+.add-member-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #edf0f4;
+}
+
+.add-member-button {
+    display: inline-block;
+    padding: 12px 18px;
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.add-member-submit {
+    background: #142b4a;
+    color: #fff;
+}
+
+.add-member-cancel {
+    background: #e9edf2;
+    color: #26384d;
+}
+
+@media (max-width: 650px) {
+    .add-member-page {
+        padding: 15px;
+    }
+
+    .add-member-card {
+        padding: 17px;
+    }
+
+    .add-member-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .add-member-field.full {
+        grid-column: auto;
+    }
+}
+</style>
+
+<main class="add-member-page">
+
+    <div class="add-member-heading">
+        <h1>Register New Member</h1>
+        <p>Add a new altar server to the ministry membership records.</p>
+    </div>
+
+    <section class="add-member-card">
+
+        <h2>Member Information</h2>
+
+        <?php if (!empty($errors)): ?>
+
+            <div class="add-member-errors">
+                <strong>Please correct the following:</strong>
+
+                <ul>
+                    <?php foreach ($errors as $error): ?>
+                        <li><?= addEscape($error) ?></li>
+                    <?php endforeach; ?>
+                </ul>
             </div>
 
-        </div>
-
-        <!-- REGISTRATION FORM PANEL -->
-
-        <section class="form-panel">
-
-            <!-- ERROR MESSAGES -->
-
-            <?php if (!empty($errors)): ?>
-
-                <div class="error-box">
-
-                    <strong>Please correct the following:</strong>
-
-                    <?php foreach ($errors as $error): ?>
-
-                        <div>
-                            • <?= addEscape($error) ?>
-                        </div>
-
-                    <?php endforeach; ?>
-
-                </div>
-
-            <?php endif; ?>
-
-            <!-- REGISTRATION FORM -->
-
-            <form method="POST" data-prevent-double-submit>
-
-                <?= csrfField() ?>
-
-                <!-- PERSONAL INFORMATION -->
-
-                <h3 class="form-section-title">
-                    Personal Information
-                </h3>
-
-                <div class="form-grid">
-
-                    <div class="form-group">
-
-                        <label>
-                            First Name <span class="required">*</span>
-                        </label>
-
-                        <input
-                            type="text"
-                            name="first_name"
-                            maxlength="100"
-                            placeholder="Enter first name"
-                            autocomplete="given-name"
-                            required
-                            value="<?= addEscape($firstName) ?>"
-                        >
-
-                    </div>
-
-                    <div class="form-group">
-
-                        <label>Middle Name</label>
-
-                        <input
-                            type="text"
-                            name="middle_name"
-                            maxlength="100"
-                            placeholder="Enter middle name"
-                            autocomplete="additional-name"
-                            value="<?= addEscape($middleName) ?>"
-                        >
-
-                    </div>
-
-                    <div class="form-group">
-
-                        <label>
-                            Last Name <span class="required">*</span>
-                        </label>
-
-                        <input
-                            type="text"
-                            name="last_name"
-                            maxlength="100"
-                            placeholder="Enter last name"
-                            autocomplete="family-name"
-                            required
-                            value="<?= addEscape($lastName) ?>"
-                        >
-
-                    </div>
-
-                    <div class="form-group">
-
-                        <label>
-                            Sex <span class="required">*</span>
-                        </label>
-
-                        <select name="sex" required>
-
-                            <option value="">Select sex</option>
-
-                            <option
-                                value="Male"
-                                <?= $sex === 'Male' ? 'selected' : '' ?>
-                            >
-                                Male
-                            </option>
-
-                            <option
-                                value="Female"
-                                <?= $sex === 'Female' ? 'selected' : '' ?>
-                            >
-                                Female
-                            </option>
-
-                        </select>
-
-                    </div>
-
-                    <div class="form-group">
-
-                        <label>Birth Date</label>
-
-                        <input
-                            type="date"
-                            name="birth_date"
-                            max="<?= date('Y-m-d') ?>"
-                            value="<?= addEscape($birthDate) ?>"
-                        >
-
-                    </div>
-
-                    <div class="form-group full-width">
-
-                        <label>Address</label>
-
-                        <textarea
-                            name="address"
-                            maxlength="255"
-                            placeholder="Enter complete address"
-                        ><?= addEscape($address) ?></textarea>
-
-                    </div>
-
-                </div>
-
-                <!-- CONTACT INFORMATION -->
-
-                <h3 class="form-section-title">
-                    Contact Information
-                </h3>
-
-                <div class="form-grid">
-
-                    <div class="form-group">
-
-                        <label>Contact Number</label>
-
-                        <input
-                            type="tel"
-                            name="contact_number"
-                            maxlength="30"
-                            placeholder="Enter contact number"
-                            autocomplete="tel"
-                            value="<?= addEscape($contactNumber) ?>"
-                        >
-
-                    </div>
-
-                    <div class="form-group">
-
-                        <label>Email Address</label>
-
-                        <input
-                            type="email"
-                            name="email"
-                            maxlength="150"
-                            placeholder="Enter email address"
-                            autocomplete="email"
-                            value="<?= addEscape($email) ?>"
-                        >
-
-                    </div>
-
-                    <div class="form-group">
-
-                        <label>Member Status</label>
-
-                        <select name="member_status">
-
-                            <option
-                                value="Active"
-                                <?= $memberStatus === 'Active' ? 'selected' : '' ?>
-                            >
-                                Active
-                            </option>
-
-                            <option
-                                value="Inactive"
-                                <?= $memberStatus === 'Inactive' ? 'selected' : '' ?>
-                            >
-                                Inactive
-                            </option>
-
-                        </select>
-
-                        <small class="form-hint">
-                            Only active members are eligible for QR attendance.
-                        </small>
-
-                    </div>
-
-                </div>
-
-                <!-- QR CODE INFORMATION -->
-
-                <div class="qr-notice">
-
-                    <div class="qr-notice-icon">
-                        ▦
-                    </div>
-
-                    <div>
-
-                        <h4>Permanent QR Code Registration</h4>
-
-                        <p>
-                            A unique permanent QR security token will
-                            automatically be generated when this member
-                            is registered. The member will use the same
-                            QR code for every Sunday Mass attendance.
-                            After registration, the system will open the
-                            member's QR identification card, where it
-                            can be viewed and printed.
-                        </p>
-
-                    </div>
-
-                </div>
-
-                <!-- FORM ACTIONS -->
-
-                <div class="form-actions">
-
-                    <a
-                        href="/index.php"
-                        class="btn-cancel"
+        <?php endif; ?>
+
+        <form method="POST" action="/members/add.php">
+
+            <?= csrfField() ?>
+
+            <div class="add-member-grid">
+
+                <div class="add-member-field">
+                    <label for="first_name">First Name *</label>
+                    <input
+                        type="text"
+                        id="first_name"
+                        name="first_name"
+                        maxlength="100"
+                        value="<?= addEscape($firstName) ?>"
+                        required
                     >
-                        CANCEL
-                    </a>
-
-                    <button
-                        type="submit"
-                        class="btn-save"
-                    >
-                        REGISTER MEMBER
-                    </button>
-
                 </div>
 
-            </form>
+                <div class="add-member-field">
+                    <label for="middle_name">Middle Name</label>
+                    <input
+                        type="text"
+                        id="middle_name"
+                        name="middle_name"
+                        maxlength="100"
+                        value="<?= addEscape($middleName) ?>"
+                    >
+                </div>
 
-        </section>
+                <div class="add-member-field">
+                    <label for="last_name">Last Name *</label>
+                    <input
+                        type="text"
+                        id="last_name"
+                        name="last_name"
+                        maxlength="100"
+                        value="<?= addEscape($lastName) ?>"
+                        required
+                    >
+                </div>
 
-    </div>
+                <div class="add-member-field">
+                    <label for="sex">Sex *</label>
+                    <select id="sex" name="sex" required>
+                        <option value="">Select sex</option>
+                        <option value="Male"
+                            <?= $sex === 'Male' ? 'selected' : '' ?>>
+                            Male
+                        </option>
+                        <option value="Female"
+                            <?= $sex === 'Female' ? 'selected' : '' ?>>
+                            Female
+                        </option>
+                    </select>
+                </div>
+
+                <div class="add-member-field">
+                    <label for="birth_date">Date of Birth *</label>
+                    <input
+                        type="date"
+                        id="birth_date"
+                        name="birth_date"
+                        max="<?= date('Y-m-d') ?>"
+                        value="<?= addEscape($birthDate) ?>"
+                        required
+                    >
+                </div>
+
+                <div class="add-member-field">
+                    <label for="contact_number">Contact Number</label>
+                    <input
+                        type="tel"
+                        id="contact_number"
+                        name="contact_number"
+                        maxlength="30"
+                        value="<?= addEscape($contactNumber) ?>"
+                        placeholder="Enter contact number"
+                    >
+                </div>
+
+                <div class="add-member-field full">
+                    <label for="address">Complete Address *</label>
+                    <textarea
+                        id="address"
+                        name="address"
+                        maxlength="255"
+                        required
+                        placeholder="Enter complete address"
+                    ><?= addEscape($address) ?></textarea>
+                </div>
+
+                <div class="add-member-field">
+                    <label for="email">Email Address</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        maxlength="150"
+                        value="<?= addEscape($email) ?>"
+                        placeholder="example@email.com"
+                    >
+                    <span class="add-member-help">
+                        Optional
+                    </span>
+                </div>
+
+                <div class="add-member-field">
+                    <label for="status">Member Status *</label>
+                    <select id="status" name="status" required>
+                        <option value="Active"
+                            <?= $status === 'Active' ? 'selected' : '' ?>>
+                            Active
+                        </option>
+
+                        <option value="Inactive"
+                            <?= $status === 'Inactive' ? 'selected' : '' ?>>
+                            Inactive
+                        </option>
+                    </select>
+                </div>
+
+            </div>
+
+            <div class="add-member-actions">
+
+                <button type="submit"
+                        class="add-member-button add-member-submit">
+                    Register Member
+                </button>
+
+                <a href="/members/index.php"
+                   class="add-member-button add-member-cancel">
+                    Cancel
+                </a>
+
+            </div>
+
+        </form>
+
+    </section>
 
 </main>
 
 <?php
-/*
-|--------------------------------------------------------------------------
-| SHARED FOOTER
-|--------------------------------------------------------------------------
-*/
-
 require_once __DIR__ . '/../includes/footer.php';
 ?>
