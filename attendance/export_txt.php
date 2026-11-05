@@ -1,186 +1,80 @@
 <?php
-
 /*
 |--------------------------------------------------------------------------
 | ALTAR SERVERS MANAGEMENT SYSTEM
-| EXPORT ATTENDANCE HISTORY TO TEXT FILE
-| SUPABASE POSTGRESQL VERSION
+| EXPORT PRESENT ATTENDANCE TO TXT
+| SUPABASE POSTGRESQL
 |--------------------------------------------------------------------------
 */
+
+date_default_timezone_set('Asia/Manila');
 
 require_once __DIR__ . '/../includes/auth.php';
 requireLogin();
 
 require_once __DIR__ . '/../config/database.php';
 
-date_default_timezone_set('Asia/Manila');
-
-// =====================================================
-// HELPER FUNCTIONS
-// =====================================================
-
-function txtClean($value): string
-{
-    return trim(
-        preg_replace('/[\r\n\t]+/', ' ', (string)($value ?? ''))
-    );
-}
-
-function txtCheckInTime($value): string
-{
-    if (empty($value)) {
-        return '-';
-    }
-
-    try {
-
-        $hasTimezone = preg_match(
-            '/(Z|[+-][0-9]{2}:?[0-9]{2})$/i',
-            trim($value)
-        );
-
-        $timezone = $hasTimezone
-            ? new DateTimeZone('UTC')
-            : new DateTimeZone('Asia/Manila');
-
-        $date = new DateTimeImmutable($value, $timezone);
-
-        return $date
-            ->setTimezone(new DateTimeZone('Asia/Manila'))
-            ->format('h:i A');
-
-    } catch (Throwable $e) {
-        return '-';
-    }
-}
-
-// =====================================================
-// RECEIVE FILTERS
-// =====================================================
-
-$today = date('Y-m-d');
-
-$selectedDate = $_GET['date'] ?? $today;
-$selectedMass = $_GET['mass_time'] ?? '';
-$selectedStatus = $_GET['status'] ?? '';
-$search = trim($_GET['search'] ?? '');
-
-$allowedMassTimes = [
+$massTimes = [
     '6:00 AM',
     '8:00 AM',
     '10:00 AM',
     '5:00 PM'
 ];
 
-$allowedStatuses = [
-    'Present',
-    'Absent',
-    'Late',
-    'Excused'
-];
+$filterDate = trim($_GET['date'] ?? '');
+$filterMass = trim($_GET['mass_time'] ?? '');
 
-// Validate date
+if ($filterDate !== '') {
 
-$dateObject = DateTime::createFromFormat(
-    '!Y-m-d',
-    $selectedDate
-);
+    $dateObject = DateTime::createFromFormat('!Y-m-d', $filterDate);
 
-if (
-    !$dateObject ||
-    $dateObject->format('Y-m-d') !== $selectedDate
-) {
-    $selectedDate = $today;
+    if (!$dateObject || $dateObject->format('Y-m-d') !== $filterDate) {
+        http_response_code(400);
+        exit('Invalid attendance date.');
+    }
 }
 
-// Validate Mass time
-
-if (
-    $selectedMass !== '' &&
-    !in_array($selectedMass, $allowedMassTimes, true)
-) {
-    $selectedMass = '';
+if (!in_array($filterMass, $massTimes, true)) {
+    $filterMass = '';
 }
-
-// Validate status
-
-if (
-    $selectedStatus !== '' &&
-    !in_array($selectedStatus, $allowedStatuses, true)
-) {
-    $selectedStatus = '';
-}
-
-// =====================================================
-// FETCH ATTENDANCE RECORDS
-// =====================================================
 
 try {
+
+    $where = [
+        "LOWER(TRIM(ma.attendance_status)) = 'present'"
+    ];
+
+    $params = [];
+
+    if ($filterDate !== '') {
+        $where[] = 'ma.mass_date = CAST(:filter_date AS DATE)';
+        $params[':filter_date'] = $filterDate;
+    }
+
+    if ($filterMass !== '') {
+        $where[] = 'ma.mass_time = :filter_mass';
+        $params[':filter_mass'] = $filterMass;
+    }
 
     $sql = "
         SELECT
             ma.id,
             ma.mass_date,
             ma.mass_time,
-            ma.attendance_status,
             ma.check_in_time,
             ma.attendance_method,
-            m.member_code,
-            m.full_name
+            COALESCE(m.member_code, 'N/A') AS member_code,
+            COALESCE(m.full_name, 'Unknown Member') AS full_name
 
         FROM public.mass_attendance ma
 
-        INNER JOIN public.members m
+        LEFT JOIN public.members m
             ON m.id = ma.member_id
 
-        WHERE ma.mass_date = :mass_date
-    ";
+        WHERE " . implode(' AND ', $where) . "
 
-    $params = [
-        ':mass_date' => $selectedDate
-    ];
-
-    // Mass schedule filter
-
-    if ($selectedMass !== '') {
-
-        $sql .= "
-            AND ma.mass_time = :mass_time
-        ";
-
-        $params[':mass_time'] = $selectedMass;
-    }
-
-    // Attendance status filter
-
-    if ($selectedStatus !== '') {
-
-        $sql .= "
-            AND ma.attendance_status = :status
-        ";
-
-        $params[':status'] = $selectedStatus;
-    }
-
-    // Member name or code search
-
-    if ($search !== '') {
-
-        $sql .= "
-            AND (
-                m.full_name ILIKE :search_name
-                OR m.member_code ILIKE :search_code
-            )
-        ";
-
-        $params[':search_name'] = '%' . $search . '%';
-        $params[':search_code'] = '%' . $search . '%';
-    }
-
-    // Sort by Mass schedule and member name
-
-    $sql .= "
         ORDER BY
+            ma.mass_date ASC,
             CASE ma.mass_time
                 WHEN '6:00 AM' THEN 1
                 WHEN '8:00 AM' THEN 2
@@ -196,131 +90,103 @@ try {
 
     $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-} catch (PDOException $e) {
+} catch (Throwable $e) {
 
-    error_log(
-        'Attendance TXT Export Error: ' . $e->getMessage()
-    );
+    error_log('TXT export error: ' . $e->getMessage());
 
     http_response_code(500);
-    exit('Unable to generate attendance text report.');
-
+    exit('Unable to generate the attendance text report. Please check the server logs.');
 }
 
-// =====================================================
-// CALCULATE TOTALS
-// =====================================================
+$filename = 'Attendance_Present_' .
+    ($filterDate !== '' ? $filterDate : date('Y-m-d')) .
+    '.txt';
 
-$totals = [
-    'Present' => 0,
-    'Absent' => 0,
-    'Late' => 0,
-    'Excused' => 0
-];
+header('Content-Type: text/plain; charset=UTF-8');
+header('Content-Disposition: attachment; filename="' . $filename . '"');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
 
-foreach ($records as $record) {
+$dateLabel = $filterDate !== ''
+    ? date('F d, Y', strtotime($filterDate))
+    : 'All Dates';
 
-    $status = $record['attendance_status'];
+$massLabel = $filterMass !== ''
+    ? $filterMass
+    : 'All Mass Schedules';
 
-    if (isset($totals[$status])) {
-        $totals[$status]++;
-    }
-}
+echo "ST. FRANCIS XAVIER CATHEDRAL\n";
+echo "MINISTRY OF THE ALTAR SERVERS\n";
+echo "ATTENDANCE REPORT\n";
 
-// =====================================================
-// GENERATE TEXT REPORT
-// =====================================================
+echo str_repeat('=', 65) . "\n";
 
-$formattedDate = date(
-    'F d, Y',
-    strtotime($selectedDate)
-);
+echo "Mass Date: " . $dateLabel . "\n";
+echo "Mass Schedule: " . $massLabel . "\n";
+echo "Attendance Status: PRESENT\n";
 
-$report = [];
+echo "Total Present Members: " . count($records) . "\n";
 
-$report[] = "============================================================";
-$report[] = "             ST. FRANCIS XAVIER CATHEDRAL";
-$report[] = "                MINISTRY OF ALTAR SERVERS";
-$report[] = "                 DAILY ATTENDANCE REPORT";
-$report[] = "============================================================";
-$report[] = "";
+echo "Generated: " . date('F d, Y h:i A') . "\n";
 
-$report[] = "Attendance Date : " . $formattedDate;
-$report[] = "Mass Schedule   : " . ($selectedMass ?: 'All Mass Schedules');
-$report[] = "Status Filter   : " . ($selectedStatus ?: 'All Statuses');
-$report[] = "Member Search   : " . ($search ?: 'All Members');
+echo str_repeat('=', 65) . "\n\n";
 
-$report[] = "";
-$report[] = "------------------------------------------------------------";
-$report[] = "                    ATTENDANCE SUMMARY";
-$report[] = "------------------------------------------------------------";
-
-$report[] = "Present : " . $totals['Present'];
-$report[] = "Absent  : " . $totals['Absent'];
-$report[] = "Late    : " . $totals['Late'];
-$report[] = "Excused : " . $totals['Excused'];
-
-$report[] = "";
-$report[] = "------------------------------------------------------------";
-$report[] = "                 MEMBER ATTENDANCE RECORDS";
-$report[] = "------------------------------------------------------------";
-$report[] = "";
-
-if (empty($records)) {
-
-    $report[] = "No attendance records found for the selected date.";
-
-} else {
+if (!empty($records)) {
 
     foreach ($records as $index => $record) {
 
-        $report[] = "RECORD NO. " . ($index + 1);
-        $report[] = "Member Name    : " . txtClean($record['full_name']);
-        $report[] = "Member Code    : " . txtClean($record['member_code']);
-        $report[] = "Mass Date      : " . $formattedDate;
-        $report[] = "Mass Schedule  : " . txtClean($record['mass_time']);
-        $report[] = "Check-in Time  : " . txtCheckInTime($record['check_in_time']);
-        $report[] = "Status         : " . txtClean($record['attendance_status']);
-        $report[] = "Method         : " . txtClean($record['attendance_method'] ?: '-');
+        $checkIn = 'N/A';
 
-        $report[] = "------------------------------------------------------------";
+        if (!empty($record['check_in_time'])) {
+            try {
+                $checkIn = (new DateTime(
+                    $record['check_in_time']
+                ))
+                ->setTimezone(new DateTimeZone('Asia/Manila'))
+                ->format('h:i A');
+            } catch (Throwable $e) {
+                $checkIn = 'N/A';
+            }
+        }
+
+        $massDate = 'N/A';
+
+        if (!empty($record['mass_date'])) {
+            $massDate = date(
+                'F d, Y',
+                strtotime($record['mass_date'])
+            );
+        }
+
+        echo ($index + 1) . ". " .
+            $record['full_name'] . "\n";
+
+        echo "   Member Code: " .
+            $record['member_code'] . "\n";
+
+        echo "   Mass Date: " .
+            $massDate . "\n";
+
+        echo "   Mass Schedule: " .
+            $record['mass_time'] . "\n";
+
+        echo "   Check-in Time: " .
+            $checkIn . "\n";
+
+        echo "   Attendance Method: " .
+            $record['attendance_method'] . "\n";
+
+        echo str_repeat('-', 65) . "\n";
     }
+
+} else {
+
+    echo "No present members found for the selected filters.\n";
 }
 
-$report[] = "";
-$report[] = "Total Records: " . count($records);
-$report[] = "";
-$report[] = "Prepared by: Altar Servers Coordinator";
-$report[] = "";
-$report[] = "                    AMARE ET SERVIRE";
-$report[] = "";
-$report[] = "St. Francis Xavier Cathedral";
-$report[] = "Ministry of Altar Servers";
-$report[] = "";
-$report[] = "Generated on: " . date('F d, Y h:i A');
-$report[] = "";
-$report[] = "============================================================";
-
-// =====================================================
-// DOWNLOAD TXT FILE
-// =====================================================
-
-$filename = 'Altar_Servers_Attendance_' . $selectedDate . '.txt';
-
-$content = implode("\r\n", $report);
-
-header('Content-Type: text/plain; charset=UTF-8');
-
-header(
-    'Content-Disposition: attachment; filename="' .
-    $filename . '"'
-);
-
-header('Content-Length: ' . strlen($content));
-
-header('Cache-Control: no-store, no-cache, must-revalidate');
-
-echo "\xEF\xBB\xBF";
-echo $content;
+echo "\n";
+echo "Prepared for the Ministry of the Altar Servers.\n";
+echo "St. Francis Xavier Cathedral\n";
 
 exit;
+?>

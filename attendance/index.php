@@ -3,7 +3,6 @@
 |--------------------------------------------------------------------------
 | ALTAR SERVERS MANAGEMENT SYSTEM
 | ATTENDANCE RECORDS
-| St. Francis Xavier Cathedral
 | PHP + SUPABASE POSTGRESQL
 |--------------------------------------------------------------------------
 */
@@ -14,12 +13,6 @@ require_once __DIR__ . '/../includes/auth.php';
 requireLogin();
 
 require_once __DIR__ . '/../config/database.php';
-
-/*
-|--------------------------------------------------------------------------
-| PAGE SETTINGS
-|--------------------------------------------------------------------------
-*/
 
 $pageTitle = 'Attendance Records';
 $activePage = 'attendance';
@@ -47,46 +40,6 @@ function attendanceEscape($value): string
     );
 }
 
-function attendanceFormatDate($date): string
-{
-    if (empty($date)) {
-        return 'N/A';
-    }
-
-    try {
-        return (new DateTime($date))
-            ->format('F d, Y');
-    } catch (Throwable $e) {
-        return 'N/A';
-    }
-}
-
-function attendanceFormatTime($time): string
-{
-    if (empty($time)) {
-        return 'N/A';
-    }
-
-    try {
-        return (new DateTime($time))
-            ->setTimezone(new DateTimeZone('Asia/Manila'))
-            ->format('h:i A');
-    } catch (Throwable $e) {
-        return attendanceEscape($time);
-    }
-}
-
-function attendanceStatusClass($status): string
-{
-    return match (strtolower(trim((string)$status))) {
-        'present' => 'present',
-        'absent' => 'absent',
-        'late' => 'late',
-        'excused' => 'excused',
-        default => 'unknown'
-    };
-}
-
 /*
 |--------------------------------------------------------------------------
 | FILTERS
@@ -99,7 +52,7 @@ $filterStatus = trim($_GET['status'] ?? '');
 $search = trim($_GET['search'] ?? '');
 
 if ($filterDate !== '') {
-    $dateObject = DateTime::createFromFormat('Y-m-d', $filterDate);
+    $dateObject = DateTime::createFromFormat('!Y-m-d', $filterDate);
 
     if (!$dateObject || $dateObject->format('Y-m-d') !== $filterDate) {
         $filterDate = '';
@@ -116,7 +69,7 @@ if (!in_array($filterStatus, $statuses, true)) {
 
 /*
 |--------------------------------------------------------------------------
-| DATABASE DATA
+| ATTENDANCE DATA
 |--------------------------------------------------------------------------
 */
 
@@ -129,12 +82,6 @@ $excusedCount = 0;
 $errorMessage = '';
 
 try {
-
-    /*
-    |--------------------------------------------------------------------------
-    | BUILD FILTER QUERY
-    |--------------------------------------------------------------------------
-    */
 
     $where = [];
     $params = [];
@@ -164,17 +111,9 @@ try {
         $params[':search_code'] = '%' . $search . '%';
     }
 
-    $whereSQL = '';
-
-    if (!empty($where)) {
-        $whereSQL = 'WHERE ' . implode(' AND ', $where);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | GET ATTENDANCE RECORDS
-    |--------------------------------------------------------------------------
-    */
+    $whereSQL = !empty($where)
+        ? 'WHERE ' . implode(' AND ', $where)
+        : '';
 
     $sql = "
         SELECT
@@ -189,16 +128,15 @@ try {
             COALESCE(m.member_code, 'N/A') AS member_code,
             COALESCE(m.full_name, 'Unknown Member') AS full_name
 
-        FROM public.mass_attendance AS ma
+        FROM public.mass_attendance ma
 
-        LEFT JOIN public.members AS m
+        LEFT JOIN public.members m
             ON m.id = ma.member_id
 
         $whereSQL
 
         ORDER BY
             ma.mass_date DESC,
-
             CASE ma.mass_time
                 WHEN '6:00 AM' THEN 1
                 WHEN '8:00 AM' THEN 2
@@ -206,7 +144,6 @@ try {
                 WHEN '5:00 PM' THEN 4
                 ELSE 5
             END,
-
             ma.check_in_time DESC NULLS LAST
     ";
 
@@ -215,14 +152,6 @@ try {
 
     $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $totalRecords = count($records);
-
-    /*
-    |--------------------------------------------------------------------------
-    | COUNT ATTENDANCE STATUSES
-    |--------------------------------------------------------------------------
-    */
-
     foreach ($records as $record) {
 
         $status = strtolower(
@@ -230,7 +159,6 @@ try {
         );
 
         switch ($status) {
-
             case 'present':
                 $presentCount++;
                 break;
@@ -249,34 +177,39 @@ try {
         }
     }
 
+    $totalRecords = count($records);
+
 } catch (Throwable $e) {
 
-    error_log(
-        'Attendance Records Error: ' . $e->getMessage()
-    );
+    error_log('Attendance index error: ' . $e->getMessage());
 
-    $errorMessage = 'Unable to load attendance records. Please check your database configuration and table structure.';
+    $errorMessage = 'Unable to retrieve attendance records. Please check your database configuration and table structure.';
 }
 
 /*
 |--------------------------------------------------------------------------
-| INCLUDE WEBSITE HEADER
+| EXPORT LINKS
+|--------------------------------------------------------------------------
+| Both export pages receive the same filters.
+| They export only members whose status is Present.
 |--------------------------------------------------------------------------
 */
 
+$exportParams = http_build_query([
+    'date' => $filterDate,
+    'mass_time' => $filterMass
+]);
+
+$exportDocUrl = 'export_doc.php?' . $exportParams;
+$exportTxtUrl = 'export_txt.php?' . $exportParams;
+
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/sidebar.php';
-
 ?>
 
 <style>
-/* =========================================================
-   ATTENDANCE RECORDS PAGE
-========================================================= */
-
 .attendance-page {
     width: 100%;
-    max-width: 100%;
     padding: 25px;
     box-sizing: border-box;
     color: #263445;
@@ -303,10 +236,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
     font-size: 14px;
 }
 
-.attendance-heading-actions {
+.attendance-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 9px;
 }
 
 .attendance-btn {
@@ -314,18 +247,18 @@ require_once __DIR__ . '/../includes/sidebar.php';
     justify-content: center;
     align-items: center;
     gap: 7px;
-    padding: 11px 16px;
+    padding: 11px 15px;
     border: none;
     border-radius: 8px;
     text-decoration: none;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: 0.2s;
+    transition: .2s;
 }
 
 .attendance-btn:hover {
-    opacity: 0.88;
+    opacity: .88;
     transform: translateY(-1px);
 }
 
@@ -339,7 +272,15 @@ require_once __DIR__ . '/../includes/sidebar.php';
     color: #344054;
 }
 
-/* SUMMARY CARDS */
+.btn-doc {
+    background: #2458a6;
+    color: white;
+}
+
+.btn-txt {
+    background: #526171;
+    color: white;
+}
 
 .attendance-summary {
     display: grid;
@@ -349,12 +290,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
 }
 
 .attendance-card {
-    background: #fff;
+    background: white;
     border: 1px solid #e7ebef;
     border-radius: 12px;
     padding: 19px;
     min-width: 0;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.035);
+    box-shadow: 0 3px 12px rgba(0,0,0,.035);
 }
 
 .attendance-card-label {
@@ -375,15 +316,17 @@ require_once __DIR__ . '/../includes/sidebar.php';
     margin-bottom: 10px;
 }
 
-/* FILTER SECTION */
-
-.attendance-panel {
-    background: #fff;
+.attendance-panel,
+.attendance-table-panel {
+    background: white;
     border: 1px solid #e7ebef;
     border-radius: 12px;
-    padding: 20px;
     margin-bottom: 22px;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.035);
+    box-shadow: 0 3px 12px rgba(0,0,0,.035);
+}
+
+.attendance-panel {
+    padding: 20px;
 }
 
 .attendance-panel-title {
@@ -415,7 +358,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
     padding: 0 11px;
     border: 1px solid #dce2e8;
     border-radius: 7px;
-    background: #fff;
+    background: white;
     color: #344054;
     font-size: 13px;
     box-sizing: border-box;
@@ -425,17 +368,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
 .attendance-field select:focus {
     outline: none;
     border-color: #426d60;
-    box-shadow: 0 0 0 3px rgba(66,109,96,0.1);
-}
-
-/* TABLE */
-
-.attendance-table-panel {
-    background: #fff;
-    border: 1px solid #e7ebef;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.035);
 }
 
 .attendance-table-header {
@@ -451,7 +383,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
 .attendance-table-header h2 {
     margin: 0;
     font-size: 17px;
-    font-weight: 700;
 }
 
 .attendance-table-header span {
@@ -477,7 +408,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
     font-size: 11px;
     text-align: left;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
     white-space: nowrap;
 }
 
@@ -486,7 +416,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
     border-bottom: 1px solid #edf0f2;
     font-size: 13px;
     color: #344054;
-    vertical-align: middle;
 }
 
 .attendance-table tbody tr:hover {
@@ -553,20 +482,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
     color: #8994a1;
 }
 
-.empty-records .empty-icon {
-    font-size: 35px;
-    margin-bottom: 12px;
-}
-
 .empty-records h3 {
     color: #344054;
     font-size: 16px;
-    margin: 0 0 7px;
-}
-
-.empty-records p {
-    font-size: 13px;
-    margin: 0;
+    margin-bottom: 7px;
 }
 
 .attendance-error {
@@ -579,7 +498,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
     font-size: 13px;
 }
 
-/* RESPONSIVE */
+.export-note {
+    font-size: 12px;
+    color: #788493;
+    margin-top: 12px;
+}
 
 @media (max-width: 1100px) {
     .attendance-summary {
@@ -596,20 +519,16 @@ require_once __DIR__ . '/../includes/sidebar.php';
         padding: 15px;
     }
 
-    .attendance-heading {
-        align-items: flex-start;
-    }
-
     .attendance-heading h1 {
         font-size: 22px;
     }
 
-    .attendance-heading-actions {
+    .attendance-actions {
         width: 100%;
     }
 
-    .attendance-heading-actions .attendance-btn {
-        flex: 1;
+    .attendance-actions .attendance-btn {
+        flex: 1 1 130px;
     }
 
     .attendance-summary {
@@ -632,10 +551,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
     .attendance-panel {
         padding: 15px;
     }
-
-    .attendance-table-header {
-        padding: 15px;
-    }
 }
 
 @media (max-width: 380px) {
@@ -648,61 +563,38 @@ require_once __DIR__ . '/../includes/sidebar.php';
 <main class="main-content">
     <div class="attendance-page">
 
-        <!-- PAGE HEADING -->
-
         <div class="attendance-heading">
-
             <div>
                 <h1>Attendance Records</h1>
-
                 <p>
                     View and manage recorded Mass attendance
                     of altar servers.
                 </p>
             </div>
 
-            <div class="attendance-heading-actions">
-
-                <a
-                    href="scan.php"
-                    class="attendance-btn btn-primary"
-                >
-                    <span>📷</span>
-                    Scan QR Code
+            <div class="attendance-actions">
+                <a href="scan.php" class="attendance-btn btn-primary">
+                    📷 Scan QR Code
                 </a>
 
-                <a
-                    href="history.php"
-                    class="attendance-btn btn-secondary"
-                >
-                    <span>📋</span>
-                    Attendance History
+                <a href="history.php" class="attendance-btn btn-secondary">
+                    📋 Attendance History
                 </a>
-
             </div>
-
         </div>
 
-        <!-- ERROR MESSAGE -->
-
         <?php if ($errorMessage !== ''): ?>
-
             <div class="attendance-error">
                 <strong>Database Error:</strong>
                 <?= attendanceEscape($errorMessage) ?>
             </div>
-
         <?php endif; ?>
-
-        <!-- SUMMARY CARDS -->
 
         <section class="attendance-summary">
 
             <div class="attendance-card">
                 <div class="attendance-card-icon">📊</div>
-                <div class="attendance-card-label">
-                    Total Records
-                </div>
+                <div class="attendance-card-label">Total Records</div>
                 <div class="attendance-card-value">
                     <?= number_format($totalRecords) ?>
                 </div>
@@ -710,9 +602,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             <div class="attendance-card">
                 <div class="attendance-card-icon">✅</div>
-                <div class="attendance-card-label">
-                    Present
-                </div>
+                <div class="attendance-card-label">Present</div>
                 <div class="attendance-card-value">
                     <?= number_format($presentCount) ?>
                 </div>
@@ -720,9 +610,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             <div class="attendance-card">
                 <div class="attendance-card-icon">❌</div>
-                <div class="attendance-card-label">
-                    Absent
-                </div>
+                <div class="attendance-card-label">Absent</div>
                 <div class="attendance-card-value">
                     <?= number_format($absentCount) ?>
                 </div>
@@ -730,9 +618,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             <div class="attendance-card">
                 <div class="attendance-card-icon">⏰</div>
-                <div class="attendance-card-label">
-                    Late
-                </div>
+                <div class="attendance-card-label">Late</div>
                 <div class="attendance-card-value">
                     <?= number_format($lateCount) ?>
                 </div>
@@ -740,9 +626,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             <div class="attendance-card">
                 <div class="attendance-card-icon">📝</div>
-                <div class="attendance-card-label">
-                    Excused
-                </div>
+                <div class="attendance-card-label">Excused</div>
                 <div class="attendance-card-value">
                     <?= number_format($excusedCount) ?>
                 </div>
@@ -750,23 +634,17 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
         </section>
 
-        <!-- FILTERS -->
-
         <section class="attendance-panel">
 
             <h2 class="attendance-panel-title">
                 Filter Attendance Records
             </h2>
 
-            <form
-                action="index.php"
-                method="GET"
-                class="attendance-filter-form"
-            >
+            <form action="index.php" method="GET"
+                  class="attendance-filter-form">
 
                 <div class="attendance-field">
                     <label for="date">Mass Date</label>
-
                     <input
                         type="date"
                         id="date"
@@ -777,22 +655,16 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <div class="attendance-field">
                     <label for="mass_time">Mass Schedule</label>
-
-                    <select
-                        id="mass_time"
-                        name="mass_time"
-                    >
+                    <select id="mass_time" name="mass_time">
                         <option value="">All Schedules</option>
 
                         <?php foreach ($massTimes as $time): ?>
-
                             <option
                                 value="<?= attendanceEscape($time) ?>"
                                 <?= $filterMass === $time ? 'selected' : '' ?>
                             >
                                 <?= attendanceEscape($time) ?>
                             </option>
-
                         <?php endforeach; ?>
 
                     </select>
@@ -800,22 +672,16 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <div class="attendance-field">
                     <label for="status">Attendance Status</label>
-
-                    <select
-                        id="status"
-                        name="status"
-                    >
+                    <select id="status" name="status">
                         <option value="">All Statuses</option>
 
                         <?php foreach ($statuses as $status): ?>
-
                             <option
                                 value="<?= attendanceEscape($status) ?>"
                                 <?= $filterStatus === $status ? 'selected' : '' ?>
                             >
                                 <?= attendanceEscape($status) ?>
                             </option>
-
                         <?php endforeach; ?>
 
                     </select>
@@ -823,7 +689,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <div class="attendance-field">
                     <label for="search">Search Member</label>
-
                     <input
                         type="search"
                         id="search"
@@ -833,37 +698,49 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     >
                 </div>
 
-                <button
-                    type="submit"
-                    class="attendance-btn btn-primary"
-                >
+                <button type="submit"
+                        class="attendance-btn btn-primary">
                     🔎 Search
                 </button>
 
-                <a
-                    href="index.php"
-                    class="attendance-btn btn-secondary"
-                >
+                <a href="index.php"
+                   class="attendance-btn btn-secondary">
                     Reset
                 </a>
 
             </form>
 
-        </section>
+            <div class="export-note">
+                Export reports include only members marked Present.
+                The selected date and Mass schedule are applied.
+            </div>
 
-        <!-- ATTENDANCE TABLE -->
+        </section>
 
         <section class="attendance-table-panel">
 
             <div class="attendance-table-header">
-
                 <h2>Attendance Records</h2>
 
-                <span>
-                    <?= number_format($totalRecords) ?>
-                    record(s) found
-                </span>
+                <div class="attendance-actions">
 
+                    <a href="<?= attendanceEscape($exportDocUrl) ?>"
+                       class="attendance-btn btn-doc">
+                        📄 Export DOC
+                    </a>
+
+                    <a href="<?= attendanceEscape($exportTxtUrl) ?>"
+                       class="attendance-btn btn-txt">
+                        📝 Export TXT
+                    </a>
+
+                </div>
+            </div>
+
+            <div class="attendance-table-header">
+                <span>
+                    <?= number_format($totalRecords) ?> record(s) found
+                </span>
             </div>
 
             <div class="attendance-table-wrapper">
@@ -889,15 +766,49 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <?php foreach ($records as $index => $record): ?>
 
                             <?php
-                                $status = $record['attendance_status'] ?? '';
-                                $statusClass = attendanceStatusClass($status);
+                            $status = trim(
+                                (string)($record['attendance_status'] ?? '')
+                            );
+
+                            $statusClass = match (strtolower($status)) {
+                                'present' => 'present',
+                                'absent' => 'absent',
+                                'late' => 'late',
+                                'excused' => 'excused',
+                                default => 'unknown'
+                            };
+
+                            $checkIn = 'N/A';
+
+                            if (!empty($record['check_in_time'])) {
+                                try {
+                                    $checkIn = (new DateTime(
+                                        $record['check_in_time']
+                                    ))
+                                    ->setTimezone(
+                                        new DateTimeZone('Asia/Manila')
+                                    )
+                                    ->format('h:i A');
+                                } catch (Throwable $e) {
+                                    $checkIn = 'N/A';
+                                }
+                            }
+
+                            $massDate = 'N/A';
+
+                            if (!empty($record['mass_date'])) {
+                                try {
+                                    $massDate = (new DateTime(
+                                        $record['mass_date']
+                                    ))->format('F d, Y');
+                                } catch (Throwable $e) {
+                                    $massDate = 'N/A';
+                                }
+                            }
                             ?>
 
                             <tr>
-
-                                <td>
-                                    <?= $index + 1 ?>
-                                </td>
+                                <td><?= $index + 1 ?></td>
 
                                 <td>
                                     <div class="member-name">
@@ -909,24 +820,16 @@ require_once __DIR__ . '/../includes/sidebar.php';
                                     </div>
                                 </td>
 
-                                <td>
-                                    <?= attendanceEscape(
-                                        attendanceFormatDate($record['mass_date'])
-                                    ) ?>
-                                </td>
+                                <td><?= attendanceEscape($massDate) ?></td>
 
                                 <td>
                                     <?= attendanceEscape($record['mass_time']) ?>
                                 </td>
 
-                                <td>
-                                    <?= attendanceEscape(
-                                        attendanceFormatTime($record['check_in_time'])
-                                    ) ?>
-                                </td>
+                                <td><?= attendanceEscape($checkIn) ?></td>
 
                                 <td>
-                                    <span class="status-badge status-<?= attendanceEscape($statusClass) ?>">
+                                    <span class="status-badge status-<?= $statusClass ?>">
                                         <?= attendanceEscape($status ?: 'Unknown') ?>
                                     </span>
                                 </td>
@@ -938,7 +841,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                                         ) ?>
                                     </span>
                                 </td>
-
                             </tr>
 
                         <?php endforeach; ?>
@@ -947,45 +849,28 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                         <tr>
                             <td colspan="7">
-
                                 <div class="empty-records">
-
-                                    <div class="empty-icon">
-                                        📋
-                                    </div>
-
+                                    <div style="font-size:35px;">📋</div>
                                     <h3>No Attendance Records Found</h3>
-
                                     <p>
-                                        No records match your filters.
-                                        Scan a member's QR code to record attendance.
+                                        No records match your selected filters.
                                     </p>
-
                                 </div>
-
                             </td>
                         </tr>
 
                     <?php endif; ?>
 
                     </tbody>
-
                 </table>
 
             </div>
-
         </section>
 
     </div>
 </main>
 
 <?php
-/*
-|--------------------------------------------------------------------------
-| WEBSITE FOOTER
-|--------------------------------------------------------------------------
-*/
-
 $footerPath = __DIR__ . '/../includes/footer.php';
 
 if (file_exists($footerPath)) {
