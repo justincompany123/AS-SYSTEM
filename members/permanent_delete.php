@@ -1,27 +1,57 @@
 <?php
 
+/*
+|--------------------------------------------------------------------------
+| AS-SYSTEM
+| PERMANENTLY DELETE ARCHIVED MEMBER
+| ST. FRANCIS XAVIER CATHEDRAL
+|--------------------------------------------------------------------------
+*/
+
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../config/database.php';
 
 requireLogin();
 
+/*
+|--------------------------------------------------------------------------
+| REDIRECT FUNCTION
+|--------------------------------------------------------------------------
+*/
+
 function permanentDeleteRedirect(string $message): void
 {
-    header('Location: archived.php?message=' . urlencode($message));
+    header(
+        'Location: /members/archived.php?message=' . urlencode($message)
+    );
     exit;
 }
 
-// Only accept POST requests.
+/*
+|--------------------------------------------------------------------------
+| ALLOW POST REQUESTS ONLY
+|--------------------------------------------------------------------------
+*/
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: archived.php');
-    exit;
+    permanentDeleteRedirect('Invalid request.');
 }
 
-// Validate CSRF token.
+/*
+|--------------------------------------------------------------------------
+| VALIDATE CSRF TOKEN
+|--------------------------------------------------------------------------
+*/
+
 requireValidCSRFToken();
 
-// Validate member ID.
+/*
+|--------------------------------------------------------------------------
+| VALIDATE MEMBER ID
+|--------------------------------------------------------------------------
+*/
+
 $memberId = filter_input(
     INPUT_POST,
     'member_id',
@@ -32,12 +62,22 @@ if (!$memberId || $memberId < 1) {
     permanentDeleteRedirect('Invalid member ID.');
 }
 
+/*
+|--------------------------------------------------------------------------
+| PERMANENT DELETION
+|--------------------------------------------------------------------------
+*/
+
 try {
 
     $pdo->beginTransaction();
 
-    // Confirm that the member exists and is archived.
-    // Lock the row while processing the deletion.
+    /*
+    |--------------------------------------------------------------------------
+    | CHECK IF MEMBER EXISTS AND IS ARCHIVED
+    |--------------------------------------------------------------------------
+    */
+
     $memberStmt = $pdo->prepare("
         SELECT id, full_name
         FROM public.members
@@ -47,7 +87,7 @@ try {
     ");
 
     $memberStmt->execute([
-        'member_id' => $memberId
+        ':member_id' => $memberId
     ]);
 
     $member = $memberStmt->fetch(PDO::FETCH_ASSOC);
@@ -60,31 +100,27 @@ try {
         );
     }
 
-    // Check whether attendance history exists.
+    /*
+    |--------------------------------------------------------------------------
+    | DELETE RELATED ATTENDANCE RECORDS
+    |--------------------------------------------------------------------------
+    */
+
     $attendanceStmt = $pdo->prepare("
-        SELECT EXISTS (
-            SELECT 1
-            FROM public.mass_attendance
-            WHERE member_id = :member_id
-        )
+        DELETE FROM public.mass_attendance
+        WHERE member_id = :member_id
     ");
 
     $attendanceStmt->execute([
-        'member_id' => $memberId
+        ':member_id' => $memberId
     ]);
 
-    $hasAttendance = $attendanceStmt->fetchColumn();
+    /*
+    |--------------------------------------------------------------------------
+    | DELETE ARCHIVED MEMBER
+    |--------------------------------------------------------------------------
+    */
 
-    if ($hasAttendance) {
-
-        $pdo->rollBack();
-
-        permanentDeleteRedirect(
-            'This member has attendance records. Permanent deletion was blocked to protect the attendance history.'
-        );
-    }
-
-    // Delete only an archived member with no attendance records.
     $deleteStmt = $pdo->prepare("
         DELETE FROM public.members
         WHERE id = :member_id
@@ -92,21 +128,26 @@ try {
     ");
 
     $deleteStmt->execute([
-        'member_id' => $memberId
+        ':member_id' => $memberId
     ]);
 
-    if ($deleteStmt->rowCount() === 0) {
-        $pdo->rollBack();
+    if ($deleteStmt->rowCount() !== 1) {
 
-        permanentDeleteRedirect(
-            'The member could not be deleted.'
+        throw new RuntimeException(
+            'Member deletion was unsuccessful.'
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | COMMIT TRANSACTION
+    |--------------------------------------------------------------------------
+    */
 
     $pdo->commit();
 
     permanentDeleteRedirect(
-        'Member permanently deleted successfully.'
+        'Member and related attendance records permanently deleted.'
     );
 
 } catch (Throwable $e) {
@@ -116,10 +157,10 @@ try {
     }
 
     error_log(
-        'Permanent member deletion error: ' . $e->getMessage()
+        'AS-SYSTEM PERMANENT DELETE ERROR: ' . $e->getMessage()
     );
 
     permanentDeleteRedirect(
-        'Unable to permanently delete this member. A related database record may prevent deletion.'
+        'Unable to delete this member. Please check the database relationships.'
     );
 }
