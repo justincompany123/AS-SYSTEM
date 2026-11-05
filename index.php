@@ -29,6 +29,8 @@ $adminName = htmlspecialchars(
 
 <head>
 
+<link rel="icon" type="image/png" href="/assets/images/favicon.png">
+
     <meta charset="UTF-8">
 
     <meta name="viewport"
