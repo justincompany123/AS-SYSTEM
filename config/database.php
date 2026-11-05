@@ -1,10 +1,8 @@
 <?php
-
 // =====================================================
 // AS-SYSTEM
 // SUPABASE POSTGRESQL DATABASE CONNECTION
 // =====================================================
-
 // Read environment variables from Render
 $host = getenv('DB_HOST')?: 'aws-0-ap-northeast-1.pooler.supabase.com';
 $port = getenv('DB_PORT') ?: '5432';
