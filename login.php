@@ -1,32 +1,32 @@
+
 <?php
+/*
+|--------------------------------------------------------------------------
+| ALTAR SERVERS MANAGEMENT SYSTEM
+| ADMINISTRATOR LOGIN
+| SUPABASE POSTGRESQL
+| ST. FRANCIS XAVIER CATHEDRAL
+|--------------------------------------------------------------------------
+*/
 
-// =====================================================
-// AS-SYSTEM LOGIN
-// SUPABASE POSTGRESQL VERSION
-// =====================================================
-
-// IMPORTANT:
-// Authentication must load before database connection
-// and before any HTML output.
-
+// Authentication and session must load first.
 require_once __DIR__ . '/includes/auth.php';
 
-// Redirect administrators who are already logged in
+// If already logged in, go to dashboard.
 redirectIfLoggedIn();
 
-// Connect to Supabase PostgreSQL
+// Connect to Supabase PostgreSQL.
 require_once __DIR__ . '/config/database.php';
 
-// =====================================================
-// INITIALIZE LOGIN VARIABLES
-// =====================================================
-
+// Login variables.
 $error = '';
 $username = '';
 
-// =====================================================
-// PROCESS LOGIN FORM
-// =====================================================
+/*
+|--------------------------------------------------------------------------
+| PROCESS LOGIN
+|--------------------------------------------------------------------------
+*/
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -41,7 +41,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
 
-            // Find administrator account in Supabase
             $stmt = $pdo->prepare("
                 SELECT
                     id,
@@ -57,29 +56,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
 
             $stmt->execute([
-                'username' => $username
+                ':username' => $username
             ]);
 
-            $admin = $stmt->fetch();
+            $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            // Verify administrator account and password
             if (
                 $admin &&
                 $admin['status'] === 'Active' &&
                 password_verify($password, $admin['password'])
             ) {
 
-                // Regenerate session ID after successful login
-                session_regenerate_id(true);
+                /*
+                |--------------------------------------------------------------------------
+                | REGENERATE SESSION ID
+                |--------------------------------------------------------------------------
+                */
 
-                // Store administrator information
+                if (!session_regenerate_id(true)) {
+                    throw new RuntimeException(
+                        'Unable to regenerate administrator session.'
+                    );
+                }
+
+                /*
+                |--------------------------------------------------------------------------
+                | SAVE ADMINISTRATOR SESSION
+                |--------------------------------------------------------------------------
+                */
+
                 $_SESSION['admin_id'] = $admin['id'];
                 $_SESSION['username'] = $admin['username'];
                 $_SESSION['admin_name'] = $admin['full_name'];
                 $_SESSION['admin_role'] = $admin['role'];
                 $_SESSION['admin_email'] = $admin['email'];
 
-                // Redirect to dashboard
+                /*
+                |--------------------------------------------------------------------------
+                | SAVE SESSION BEFORE REDIRECT
+                |--------------------------------------------------------------------------
+                */
+
+                session_write_close();
+
                 header('Location: /index.php');
                 exit;
 
@@ -91,7 +110,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } catch (PDOException $e) {
 
-            // Keep technical details in server logs
             error_log(
                 'AS-SYSTEM LOGIN DATABASE ERROR: ' . $e->getMessage()
             );
@@ -105,14 +123,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
 
             $error = 'An unexpected error occurred. Please try again.';
-
         }
     }
 }
-
-// No closing PHP tag here.
-// This helps prevent accidental output before PHP headers.
-
 ?>
 
 <!DOCTYPE html>
@@ -125,14 +138,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0">
 
-    <title>Administrator Login | ALTAR SERVERS WEB</title>
+    <title>Administrator Login | ALTAR SERVERS</title>
 
-    <!-- Favicon -->
     <link rel="icon"
           type="image/png"
           href="/assets/images/favicon.png">
 
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
 
     <link rel="preconnect"
@@ -185,7 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border: 1px solid var(--border);
         }
 
-        /* LEFT BRAND PANEL */
+        /* BRAND PANEL */
 
         .brand-panel {
             background:
@@ -241,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             box-shadow: 0 0 0 7px rgba(177,138,67,.08);
         }
 
-        .brand-panel .cathedral-name {
+        .cathedral-name {
             font-size: 11px;
             letter-spacing: 3px;
             color: var(--gold-light);
@@ -257,7 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             line-height: 1.5;
         }
 
-        .brand-panel .subtitle {
+        .subtitle {
             font-size: 12px;
             color: #d7dce4;
             letter-spacing: 2px;
@@ -299,7 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-bottom: 35px;
         }
 
-        .login-heading .small-title {
+        .small-title {
             color: var(--gold);
             font-size: 10px;
             font-weight: 700;
@@ -453,7 +464,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 margin: 17px auto;
             }
 
-            .brand-panel .brand-motto {
+            .brand-motto {
                 font-size: 13px;
             }
 
@@ -502,7 +513,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     </section>
 
-
     <!-- LOGIN FORM -->
 
     <section class="login-panel">
@@ -522,27 +532,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         </div>
 
-
-        <!-- ERROR MESSAGE -->
-
         <?php if ($error !== ''): ?>
 
             <div class="error-message">
-                <?php
-                echo htmlspecialchars(
-                    $error,
-                    ENT_QUOTES,
-                    'UTF-8'
-                );
-                ?>
+                <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
             </div>
 
         <?php endif; ?>
 
-
-        <!-- LOGIN FORM -->
-
-        <form method="POST" action="">
+        <form method="POST" action="/login.php">
 
             <div class="form-group">
 
@@ -555,13 +553,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         id="username"
                         name="username"
                         placeholder="Enter your username"
-                        value="<?php
-                            echo htmlspecialchars(
-                                $username,
-                                ENT_QUOTES,
-                                'UTF-8'
-                            );
-                        ?>"
+                        value="<?= htmlspecialchars($username, ENT_QUOTES, 'UTF-8') ?>"
                         autocomplete="username"
                         required
                         autofocus
@@ -570,7 +562,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
             </div>
-
 
             <div class="form-group">
 
@@ -600,15 +591,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             </div>
 
-
             <button type="submit" class="login-button">
                 SIGN IN
             </button>
 
         </form>
-
-
-        <!-- FOOTER -->
 
         <footer class="login-footer">
 
@@ -616,8 +603,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             St. Francis Xavier Cathedral<br>
 
-            ALTAR SERVERS WEB &copy;
-            <?php echo date('Y'); ?>
+            ALTAR SERVERS WEB &copy; <?= date('Y') ?>
 
         </footer>
 
@@ -625,30 +611,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 </div>
 
-
-<!-- PASSWORD VISIBILITY -->
-
 <script>
+const toggleButton = document.getElementById('togglePassword');
+const passwordInput = document.getElementById('password');
 
-    const toggleButton =
-        document.getElementById('togglePassword');
+toggleButton.addEventListener('click', function () {
 
-    const passwordInput =
-        document.getElementById('password');
+    const isPassword = passwordInput.type === 'password';
 
-    toggleButton.addEventListener('click', function () {
+    passwordInput.type = isPassword ? 'text' : 'password';
 
-        const isPassword =
-            passwordInput.type === 'password';
+    toggleButton.textContent = isPassword ? 'HIDE' : 'SHOW';
 
-        passwordInput.type =
-            isPassword ? 'text' : 'password';
-
-        toggleButton.textContent =
-            isPassword ? 'HIDE' : 'SHOW';
-
-    });
-
+});
 </script>
 
 </body>
