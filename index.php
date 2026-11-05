@@ -54,18 +54,20 @@ try {
             SELECT 1
             FROM information_schema.columns
             WHERE table_schema = 'public'
-              AND table_name = 'members'
-              AND column_name = 'status'
+            AND table_name = 'members'
+            AND column_name = 'status'
         )
     ");
 
     $stmt->execute();
+
     $hasStatusColumn = filter_var(
         $stmt->fetchColumn(),
         FILTER_VALIDATE_BOOLEAN
     );
 
     if ($hasStatusColumn) {
+
         $activeMembers = getDashboardCount(
             $pdo,
             "SELECT COUNT(*)
@@ -79,12 +81,15 @@ try {
              FROM public.members
              WHERE LOWER(status::text) = 'archived'"
         );
+
     } else {
+
         $databaseWarnings[] =
             'The members table does not contain a status column. Active and archived counts are unavailable.';
     }
 
 } catch (PDOException $e) {
+
     error_log('AS-SYSTEM MEMBER STATUS ERROR: ' . $e->getMessage());
 
     $databaseWarnings[] =
@@ -147,31 +152,33 @@ $adminInitial = strtoupper(
 
         </div>
 
-
         <nav class="sidebar-nav">
 
+            <!-- DASHBOARD -->
             <a href="/index.php" class="active">
                 <span class="nav-icon">⌂</span>
                 <span>Dashboard</span>
             </a>
 
+            <!-- MEMBER MANAGEMENT -->
             <a href="/members/add.php">
                 <span class="nav-icon">♙</span>
                 <span>Member Management</span>
             </a>
 
+            <!-- MASS ATTENDANCE -->
             <a href="/attendance/">
                 <span class="nav-icon">▣</span>
                 <span>Mass Attendance</span>
             </a>
 
-            <a href="/archived.php">
+            <!-- ARCHIVED MEMBERS -->
+            <a href="/members/archived.php">
                 <span class="nav-icon">▤</span>
                 <span>Archived Members</span>
             </a>
 
         </nav>
-
 
         <div class="sidebar-footer">
 
@@ -184,7 +191,8 @@ $adminInitial = strtoupper(
     </aside>
 
 
-    <!-- Mobile sidebar overlay -->
+    <!-- MOBILE SIDEBAR OVERLAY -->
+
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 
@@ -273,6 +281,7 @@ $adminInitial = strtoupper(
                     </div>
 
                     <div class="dashboard-date">
+
                         <?php
                         echo htmlspecialchars(
                             $currentDate,
@@ -280,6 +289,7 @@ $adminInitial = strtoupper(
                             'UTF-8'
                         );
                         ?>
+
                     </div>
 
                 </div>
@@ -295,7 +305,9 @@ $adminInitial = strtoupper(
                             ST. FRANCIS XAVIER CATHEDRAL
                         </span>
 
-                        <h2>Welcome, <?php echo $adminName; ?>!</h2>
+                        <h2>
+                            Welcome, <?php echo $adminName; ?>!
+                        </h2>
 
                         <p>
                             Manage and monitor the members and
@@ -306,9 +318,13 @@ $adminInitial = strtoupper(
                     </div>
 
                     <div class="welcome-motto">
+
                         <span>✦</span>
+
                         <strong>Amare et Servire</strong>
+
                         <small>To Love and To Serve</small>
+
                     </div>
 
                 </section>
@@ -360,6 +376,8 @@ $adminInitial = strtoupper(
                 <div class="stats-grid">
 
 
+                    <!-- TOTAL MEMBERS -->
+
                     <div class="stat-card">
 
                         <div class="stat-icon">♙</div>
@@ -376,6 +394,8 @@ $adminInitial = strtoupper(
 
                     </div>
 
+
+                    <!-- ACTIVE MEMBERS -->
 
                     <div class="stat-card">
 
@@ -394,6 +414,8 @@ $adminInitial = strtoupper(
                     </div>
 
 
+                    <!-- ARCHIVED MEMBERS -->
+
                     <div class="stat-card">
 
                         <div class="stat-icon">▤</div>
@@ -410,6 +432,8 @@ $adminInitial = strtoupper(
 
                     </div>
 
+
+                    <!-- ATTENDANCE RECORDS -->
 
                     <div class="stat-card">
 
@@ -447,7 +471,7 @@ $adminInitial = strtoupper(
                 <div class="dashboard-modules">
 
 
-                    <!-- MEMBERS -->
+                    <!-- MEMBER MANAGEMENT -->
 
                     <a
                         href="/members/add.php"
@@ -474,7 +498,7 @@ $adminInitial = strtoupper(
                     </a>
 
 
-                    <!-- ATTENDANCE -->
+                    <!-- MASS ATTENDANCE -->
 
                     <a
                         href="/attendance/"
@@ -504,7 +528,7 @@ $adminInitial = strtoupper(
                     <!-- ARCHIVED MEMBERS -->
 
                     <a
-                        href="/archived.php"
+                        href="/members/archived.php"
                         class="module-card"
                     >
 
@@ -562,10 +586,13 @@ $adminInitial = strtoupper(
 =========================================== -->
 
 <script>
+
 document.addEventListener('DOMContentLoaded', function () {
 
     const sidebar = document.getElementById('sidebar');
+
     const menuButton = document.getElementById('menuButton');
+
     const overlay = document.getElementById('sidebarOverlay');
 
     if (!sidebar || !menuButton || !overlay) {
@@ -573,35 +600,63 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function openMenu() {
+
         sidebar.classList.add('open');
+
         overlay.classList.add('show');
+
         menuButton.setAttribute('aria-expanded', 'true');
+
     }
 
     function closeMenu() {
+
         sidebar.classList.remove('open');
+
         overlay.classList.remove('show');
+
         menuButton.setAttribute('aria-expanded', 'false');
+
     }
 
     menuButton.addEventListener('click', function () {
+
         if (sidebar.classList.contains('open')) {
+
             closeMenu();
+
         } else {
+
             openMenu();
+
         }
+
     });
 
     overlay.addEventListener('click', closeMenu);
 
     document.addEventListener('keydown', function (event) {
+
         if (event.key === 'Escape') {
+
             closeMenu();
+
         }
+
+    });
+
+    // Close sidebar after selecting a navigation link
+    document.querySelectorAll('.sidebar-nav a').forEach(function (link) {
+
+        link.addEventListener('click', closeMenu);
+
     });
 
 });
+
 </script>
 
+
 </body>
+
 </html>
