@@ -1,3 +1,4 @@
+
 <?php
 
 // =====================================================
@@ -5,18 +6,28 @@
 // SUPABASE POSTGRESQL VERSION
 // =====================================================
 
-session_start();
+// IMPORTANT:
+// Authentication must load before database connection
+// and before any HTML output.
 
+require_once __DIR__ . '/includes/auth.php';
+
+// Redirect administrators who are already logged in
+redirectIfLoggedIn();
+
+// Connect to Supabase PostgreSQL
 require_once __DIR__ . '/config/database.php';
 
-// Already logged in? Go to dashboard.
-if (isset($_SESSION['admin_id'])) {
-    header('Location: index.php');
-    exit;
-}
+// =====================================================
+// INITIALIZE LOGIN VARIABLES
+// =====================================================
 
 $error = '';
 $username = '';
+
+// =====================================================
+// PROCESS LOGIN FORM
+// =====================================================
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -31,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
 
-            // Find active administrator in Supabase
+            // Find administrator account in Supabase
             $stmt = $pdo->prepare("
                 SELECT
                     id,
@@ -52,29 +63,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $admin = $stmt->fetch();
 
-            // Verify account and password
+            // Verify administrator account and password
             if (
                 $admin &&
                 $admin['status'] === 'Active' &&
                 password_verify($password, $admin['password'])
             ) {
 
-                // Regenerate session ID after login
+                // Regenerate session ID after successful login
                 session_regenerate_id(true);
 
                 // Store administrator information
                 $_SESSION['admin_id'] = $admin['id'];
-
                 $_SESSION['username'] = $admin['username'];
-
                 $_SESSION['admin_name'] = $admin['full_name'];
-
                 $_SESSION['admin_role'] = $admin['role'];
-
                 $_SESSION['admin_email'] = $admin['email'];
 
                 // Redirect to dashboard
-                header('Location: index.php');
+                header('Location: /index.php');
                 exit;
 
             } else {
@@ -85,33 +92,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } catch (PDOException $e) {
 
-            error_log('Login database error: ' . $e->getMessage());
+            // Keep technical details in server logs
+            error_log(
+                'AS-SYSTEM LOGIN DATABASE ERROR: ' . $e->getMessage()
+            );
 
             $error = 'Unable to process your login. Please try again.';
 
+        } catch (Throwable $e) {
+
+            error_log(
+                'AS-SYSTEM LOGIN ERROR: ' . $e->getMessage()
+            );
+
+            $error = 'An unexpected error occurred. Please try again.';
+
         }
-
     }
-
 }
+
+// No closing PHP tag here.
+// This helps prevent accidental output before PHP headers.
 
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
 
-<link rel="icon" type="image/png" href="/assets/images/favicon.png">
-
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
     <title>Administrator Login | ALTAR SERVERS WEB</title>
 
+    <!-- Favicon -->
+    <link rel="icon"
+          type="image/png"
+          href="/assets/images/favicon.png">
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <link rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap"
+          rel="stylesheet">
 
     <style>
+
         :root {
             --navy: #172c46;
             --navy-dark: #102137;
@@ -157,8 +190,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         .brand-panel {
             background:
-                linear-gradient(rgba(16,33,55,.91), rgba(16,33,55,.96)),
-                url('assets/images/background.jpg') center/cover;
+                linear-gradient(
+                    rgba(16,33,55,.91),
+                    rgba(16,33,55,.96)
+                ),
+                url('/assets/images/background.jpg') center/cover;
+
             color: white;
             padding: 55px 38px;
             display: flex;
@@ -388,6 +425,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /* MOBILE */
 
         @media(max-width: 750px) {
+
             body {
                 padding: 15px;
             }
@@ -428,7 +466,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 margin-bottom: 25px;
             }
         }
+
     </style>
+
 </head>
 
 <body>
@@ -436,6 +476,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="page-wrapper">
 
     <!-- CHURCH BRANDING -->
+
     <section class="brand-panel">
 
         <div class="cross-emblem">✝</div>
@@ -462,11 +503,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     </section>
 
+
     <!-- LOGIN FORM -->
+
     <section class="login-panel">
 
         <div class="login-heading">
-            <div class="small-title">Administrator Portal</div>
+
+            <div class="small-title">
+                Administrator Portal
+            </div>
 
             <h2>Welcome Back</h2>
 
@@ -474,37 +520,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 Sign in to access the Altar Servers Management System
                 and manage ministry activities.
             </p>
+
         </div>
 
+
+        <!-- ERROR MESSAGE -->
+
         <?php if ($error !== ''): ?>
+
             <div class="error-message">
-                <?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?>
+                <?php
+                echo htmlspecialchars(
+                    $error,
+                    ENT_QUOTES,
+                    'UTF-8'
+                );
+                ?>
             </div>
+
         <?php endif; ?>
+
+
+        <!-- LOGIN FORM -->
 
         <form method="POST" action="">
 
             <div class="form-group">
+
                 <label for="username">USERNAME</label>
 
                 <div class="input-wrapper">
+
                     <input
                         type="text"
                         id="username"
                         name="username"
                         placeholder="Enter your username"
-                        value="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>"
+                        value="<?php
+                            echo htmlspecialchars(
+                                $username,
+                                ENT_QUOTES,
+                                'UTF-8'
+                            );
+                        ?>"
                         autocomplete="username"
                         required
                         autofocus
                     >
+
                 </div>
+
             </div>
 
+
             <div class="form-group">
+
                 <label for="password">PASSWORD</label>
 
                 <div class="input-wrapper">
+
                     <input
                         type="password"
                         id="password"
@@ -522,8 +596,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     >
                         SHOW
                     </button>
+
                 </div>
+
             </div>
+
 
             <button type="submit" class="login-button">
                 SIGN IN
@@ -531,26 +608,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         </form>
 
+
+        <!-- FOOTER -->
+
         <footer class="login-footer">
+
             <strong>AMARE ET SERVIRE</strong><br>
+
             St. Francis Xavier Cathedral<br>
-            ALTAR SERVERS WEB &copy; <?php echo date('Y'); ?>
+
+            ALTAR SERVERS WEB &copy;
+            <?php echo date('Y'); ?>
+
         </footer>
 
     </section>
 
 </div>
 
+
+<!-- PASSWORD VISIBILITY -->
+
 <script>
-    const toggleButton = document.getElementById('togglePassword');
-    const passwordInput = document.getElementById('password');
+
+    const toggleButton =
+        document.getElementById('togglePassword');
+
+    const passwordInput =
+        document.getElementById('password');
 
     toggleButton.addEventListener('click', function () {
-        const isPassword = passwordInput.type === 'password';
 
-        passwordInput.type = isPassword ? 'text' : 'password';
-        toggleButton.textContent = isPassword ? 'HIDE' : 'SHOW';
+        const isPassword =
+            passwordInput.type === 'password';
+
+        passwordInput.type =
+            isPassword ? 'text' : 'password';
+
+        toggleButton.textContent =
+            isPassword ? 'HIDE' : 'SHOW';
+
     });
+
 </script>
 
 </body>
