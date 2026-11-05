@@ -1,10 +1,11 @@
+
 <?php
 /*
 |--------------------------------------------------------------------------
 | ALTAR SERVERS WEB SYSTEM
-| Permanent Member QR Card
-| Supabase PostgreSQL
-| St. Francis Xavier Cathedral
+| PERMANENT MEMBER QR CARD
+| SUPABASE POSTGRESQL
+| ST. FRANCIS XAVIER CATHEDRAL
 |--------------------------------------------------------------------------
 */
 
@@ -28,7 +29,22 @@ if (!$memberId || $memberId <= 0) {
 
 /*
 |--------------------------------------------------------------------------
-| FETCH MEMBER FROM SUPABASE
+| HTML ESCAPE FUNCTION
+|--------------------------------------------------------------------------
+*/
+
+function qrEscape($value): string
+{
+    return htmlspecialchars(
+        (string) ($value ?? ''),
+        ENT_QUOTES,
+        'UTF-8'
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| FETCH MEMBER INFORMATION
 |--------------------------------------------------------------------------
 */
 
@@ -79,13 +95,15 @@ if (!$member) {
 
 /*
 |--------------------------------------------------------------------------
-| VALIDATE PERMANENT QR TOKEN
+| VALIDATE QR TOKEN
 |--------------------------------------------------------------------------
 */
 
+$qrToken = $member['qr_token'] ?? '';
+
 if (
-    empty($member['qr_token']) ||
-    !preg_match('/^[a-f0-9]{64}$/', $member['qr_token'])
+    !is_string($qrToken) ||
+    !preg_match('/^[a-f0-9]{64}$/', $qrToken)
 ) {
     http_response_code(500);
     exit('This member does not have a valid QR token.');
@@ -93,31 +111,15 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| MEMBER INFORMATION
+| PAGE INFORMATION
 |--------------------------------------------------------------------------
 */
 
-$fullName = $member['full_name'] ?? '';
-
-$memberCode = $member['member_code'] ?? '';
-
-$pageTitle = 'Member QR Card';
+$pageTitle = 'Permanent Member QR Card';
 $activePage = 'members';
 
-/*
-|--------------------------------------------------------------------------
-| HTML ESCAPE FUNCTION
-|--------------------------------------------------------------------------
-*/
-
-function qrEscape($value): string
-{
-    return htmlspecialchars(
-        (string) ($value ?? ''),
-        ENT_QUOTES,
-        'UTF-8'
-    );
-}
+$fullName = $member['full_name'];
+$memberCode = $member['member_code'];
 
 /*
 |--------------------------------------------------------------------------
@@ -129,388 +131,164 @@ require_once __DIR__ . '/../includes/header.php';
 
 ?>
 
-<style>
-
-/* PAGE LAYOUT */
-
-.main-content {
-    padding: 30px;
-    background: #F8F5ED;
-    min-height: 100vh;
-    color: #172C46;
-    font-family: 'Inter', sans-serif;
-}
-
-/* PAGE HEADING */
-
-.page-heading {
-    margin-bottom: 20px;
-}
-
-.page-heading h1 {
-    font-family: 'Cinzel', serif;
-    color: #172C46;
-    font-size: 24px;
-    margin: 0 0 8px;
-}
-
-.page-heading p {
-    color: #888;
-    font-size: 12px;
-    margin: 0;
-}
-
-/* QR CARD */
-
-.qr-card {
-    width: 340px;
-    max-width: 100%;
-    margin: 25px auto;
-    background: #FFFFFF;
-    border: 2px solid #B18A43;
-    border-radius: 14px;
-    overflow: hidden;
-    text-align: center;
-    box-shadow: 0 8px 25px rgba(23, 44, 70, .10);
-}
-
-/* QR HEADER */
-
-.qr-card-header {
-    background: #172C46;
-    color: #FFFFFF;
-    padding: 20px 15px;
-}
-
-.qr-card-header h2 {
-    font-family: 'Cinzel', serif;
-    font-size: 17px;
-    margin: 0 0 6px;
-}
-
-.qr-card-header p {
-    font-size: 10px;
-    margin: 0;
-    letter-spacing: 1px;
-    color: #E7D6B3;
-}
-
-/* QR BODY */
-
-.qr-card-body {
-    padding: 22px 20px;
-}
-
-.qr-member-name {
-    font-family: 'Cinzel', serif;
-    color: #172C46;
-    font-size: 17px;
-    font-weight: 700;
-    margin: 0 0 7px;
-}
-
-.qr-member-code {
-    color: #9A773A;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
-}
-
-/* QR IMAGE */
-
-.qr-image {
-    display: flex;
-    justify-content: center;
-    margin: 18px auto;
-    min-height: 210px;
-    align-items: center;
-}
-
-.qr-image img {
-    max-width: 210px;
-    height: auto;
-}
-
-/* QR NOTE */
-
-.qr-card-note {
-    color: #777;
-    font-size: 10px;
-    line-height: 1.6;
-    margin-top: 12px;
-}
-
-/* QR FOOTER */
-
-.qr-card-footer {
-    background: #F8F5ED;
-    color: #7A694E;
-    padding: 12px;
-    font-size: 10px;
-    letter-spacing: 1px;
-}
-
-/* BUTTONS */
-
-.qr-actions {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin: 20px auto;
-}
-
-.qr-actions button,
-.qr-actions a {
-    border: 0;
-    border-radius: 6px;
-    padding: 11px 16px;
-    font-size: 12px;
-    font-weight: 700;
-    text-decoration: none;
-    cursor: pointer;
-}
-
-.qr-print {
-    background: #172C46;
-    color: #FFFFFF;
-}
-
-.qr-print:hover {
-    background: #243F60;
-}
-
-.qr-back {
-    background: #EAE5DB;
-    color: #444;
-}
-
-/* SUCCESS MESSAGE */
-
-.success-message {
-    max-width: 500px;
-    margin: 15px auto;
-    padding: 12px 15px;
-    background: #EDF7EF;
-    border: 1px solid #C9E5CE;
-    border-radius: 6px;
-    color: #356B40;
-    font-size: 12px;
-    text-align: center;
-}
-
-/* RESPONSIVE */
-
-@media (max-width: 480px) {
-
-    .main-content {
-        padding: 20px 12px;
-    }
-
-    .qr-card {
-        width: 100%;
-    }
-
-    .qr-actions {
-        flex-direction: column;
-    }
-
-    .qr-actions button,
-    .qr-actions a {
-        width: 100%;
-        box-sizing: border-box;
-        text-align: center;
-    }
-}
-
-/* PRINT DESIGN */
-
-@media print {
-
-    @page {
-        size: 3.5in 5in;
-        margin: 0.15in;
-    }
-
-    body {
-        background: #FFFFFF !important;
-    }
-
-    .sidebar,
-    .sidebar-overlay,
-    .topbar,
-    .page-footer,
-    .qr-actions,
-    .success-message,
-    .page-heading {
-        display: none !important;
-    }
-
-    .app-layout,
-    .application-content,
-    .main-content {
-        display: block !important;
-        width: 100% !important;
-        min-height: 0 !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        background: #FFFFFF !important;
-    }
-
-    .qr-card {
-        margin: 0 auto !important;
-        box-shadow: none !important;
-        break-inside: avoid;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-    }
-}
-
-</style>
-
 <main class="main-content">
 
-    <!-- PAGE HEADING -->
+    <div class="content-container">
 
-    <div class="page-heading">
+        <!-- PAGE HEADING -->
 
-        <h1>Permanent Member QR Card</h1>
+        <div class="page-heading">
 
-        <p>
-            This QR code remains assigned to this member
-            for future Mass attendance.
-        </p>
+            <div>
+                <span class="page-eyebrow">
+                    MEMBER MANAGEMENT
+                </span>
 
-    </div>
+                <h1>Permanent Member QR Card</h1>
 
-    <!-- SUCCESS MESSAGE -->
-
-    <?php if (isset($_GET['created']) && $_GET['created'] === '1'): ?>
-
-        <div class="success-message">
-            Member successfully registered!
-            Permanent QR code generated.
-        </div>
-
-    <?php endif; ?>
-
-    <!-- MEMBER QR CARD -->
-
-    <div class="qr-card">
-
-        <div class="qr-card-header">
-
-            <h2>ST. FRANCIS XAVIER CATHEDRAL</h2>
-
-            <p>MINISTRY OF ALTAR SERVERS</p>
-
-        </div>
-
-        <div class="qr-card-body">
-
-            <p class="qr-member-name">
-                <?= qrEscape($fullName) ?>
-            </p>
-
-            <div class="qr-member-code">
-                <?= qrEscape($memberCode) ?>
-            </div>
-
-            <div
-                id="memberQRCode"
-                class="qr-image"
-                aria-label="Permanent member QR code"
-            ></div>
-
-            <div class="qr-card-note">
-
-                Present this QR code to the authorized
-                attendance scanner during your assigned Sunday Mass.
-
-                <br>
-
-                <strong>One member. One permanent QR code.</strong>
-
+                <p>
+                    This QR code remains assigned to this member
+                    for future Sunday Mass attendance.
+                </p>
             </div>
 
         </div>
 
-        <div class="qr-card-footer">
+        <!-- SUCCESS MESSAGE -->
 
-            AMARE ET SERVIRE — TO LOVE AND TO SERVE
+        <?php if (
+            isset($_GET['created']) &&
+            $_GET['created'] === '1'
+        ): ?>
+
+            <div class="success-message">
+                Member successfully registered!
+                Permanent QR code generated.
+            </div>
+
+        <?php endif; ?>
+
+        <!-- QR CARD -->
+
+        <section class="qr-card">
+
+            <div class="qr-card-header">
+
+                <h2>ST. FRANCIS XAVIER CATHEDRAL</h2>
+
+                <p>MINISTRY OF ALTAR SERVERS</p>
+
+            </div>
+
+            <div class="qr-card-body">
+
+                <p class="qr-member-name">
+                    <?= qrEscape($fullName) ?>
+                </p>
+
+                <div class="qr-member-code">
+                    <?= qrEscape($memberCode) ?>
+                </div>
+
+                <!-- QR CODE -->
+
+                <div
+                    id="memberQRCode"
+                    class="qr-image"
+                    aria-label="Permanent member QR code"
+                    role="img"
+                >
+                    <span>Generating QR code...</span>
+                </div>
+
+                <div class="qr-card-note">
+
+                    Present this QR code to the authorized
+                    attendance scanner during Sunday Mass.
+
+                    <br><br>
+
+                    <strong>
+                        One member. One permanent QR code.
+                    </strong>
+
+                </div>
+
+            </div>
+
+            <div class="qr-card-footer">
+
+                AMARE ET SERVIRE — TO LOVE AND TO SERVE
+
+            </div>
+
+        </section>
+
+        <!-- ACTION BUTTONS -->
+
+        <div class="qr-actions">
+
+            <button
+                class="qr-print"
+                type="button"
+                onclick="window.print()"
+            >
+                PRINT QR CARD
+            </button>
+
+            <a
+                class="qr-back"
+                href="/members/"
+            >
+                BACK TO MEMBERS
+            </a>
 
         </div>
-
-    </div>
-
-    <!-- QR ACTIONS -->
-
-    <div class="qr-actions">
-
-        <button
-            class="qr-print"
-            type="button"
-            onclick="window.print()"
-        >
-            PRINT QR CARD
-        </button>
-
-        <a
-            class="qr-back"
-            href="index.php"
-        >
-            BACK TO MEMBERS
-        </a>
 
     </div>
 
 </main>
 
-<!-- QR CODE GENERATOR -->
+<!-- QR CODE LIBRARY -->
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <script>
-
 document.addEventListener('DOMContentLoaded', function () {
 
     const qrContainer = document.getElementById('memberQRCode');
 
     const permanentToken = <?= json_encode(
-        $member['qr_token'],
-        JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
+        $qrToken,
+        JSON_HEX_TAG |
+        JSON_HEX_APOS |
+        JSON_HEX_AMP |
+        JSON_HEX_QUOT
     ) ?>;
 
     if (typeof QRCode === 'undefined') {
 
         qrContainer.textContent =
-            'QR generator could not load. Check your internet connection.';
+            'Unable to load QR generator. Please refresh the page.';
 
         return;
     }
 
+    qrContainer.innerHTML = '';
+
     new QRCode(qrContainer, {
-
         text: permanentToken,
-
         width: 210,
-
         height: 210,
-
         colorDark: '#172C46',
-
         colorLight: '#FFFFFF',
-
         correctLevel: QRCode.CorrectLevel.H
-
     });
 
 });
-
 </script>
 
 <?php
-
 /*
 |--------------------------------------------------------------------------
 | SHARED FOOTER
@@ -518,5 +296,4 @@ document.addEventListener('DOMContentLoaded', function () {
 */
 
 require_once __DIR__ . '/../includes/footer.php';
-
 ?>

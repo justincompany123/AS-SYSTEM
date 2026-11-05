@@ -2,7 +2,7 @@
 /*
 |--------------------------------------------------------------------------
 | ALTAR SERVERS WEB SYSTEM
-| Add New Member - Supabase PostgreSQL
+| ADD NEW MEMBER - SUPABASE POSTGRESQL
 | St. Francis Xavier Cathedral
 |--------------------------------------------------------------------------
 */
@@ -48,28 +48,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $memberStatus = trim($_POST['member_status'] ?? 'Active');
 
-    /*
-    |--------------------------------------------------------------------------
-    | VALIDATION
-    |--------------------------------------------------------------------------
-    */
-
+    // Validate first name
     if ($firstName === '' || strlen($firstName) > 100) {
         $errors[] = 'First name is required and must not exceed 100 characters.';
     }
 
+    // Validate middle name
     if (strlen($middleName) > 100) {
         $errors[] = 'Middle name must not exceed 100 characters.';
     }
 
+    // Validate last name
     if ($lastName === '' || strlen($lastName) > 100) {
         $errors[] = 'Last name is required and must not exceed 100 characters.';
     }
 
+    // Validate sex
     if (!in_array($sex, ['Male', 'Female'], true)) {
         $errors[] = 'Please select a valid sex.';
     }
 
+    // Validate birth date and calculate age
     $age = null;
 
     if ($birthDate !== '') {
@@ -86,27 +85,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Validate address
     if (strlen($address) > 255) {
         $errors[] = 'Address must not exceed 255 characters.';
     }
 
+    // Validate contact number
     if (strlen($contactNumber) > 30) {
         $errors[] = 'Contact number must not exceed 30 characters.';
     }
 
+    // Validate email
     if (strlen($email) > 150) {
         $errors[] = 'Email must not exceed 150 characters.';
     } elseif ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Please enter a valid email address.';
     }
 
+    // Validate status
     if (!in_array($memberStatus, ['Active', 'Inactive'], true)) {
         $errors[] = 'Invalid member status.';
     }
 
     /*
     |--------------------------------------------------------------------------
-    | REGISTER MEMBER AND GENERATE QR TOKEN
+    | REGISTER MEMBER
     |--------------------------------------------------------------------------
     */
 
@@ -123,18 +126,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Generate permanent QR security token
             $qrToken = bin2hex(random_bytes(32));
 
-            // Combine names into full_name
+            // Combine names
             $fullName = trim(
                 $firstName . ' ' .
                 ($middleName !== '' ? $middleName . ' ' : '') .
                 $lastName
             );
 
-            /*
-             * PostgreSQL INSERT
-             * RETURNING id replaces lastInsertId()
-             */
-
+            // Insert member into Supabase PostgreSQL
             $stmt = $pdo->prepare("
                 INSERT INTO public.members (
                     member_code,
@@ -180,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $pdo->commit();
 
-            // Redirect to permanent QR card
+            // Redirect to QR identification card
             header(
                 'Location: qr_card.php?id=' .
                 $newMemberId .
@@ -195,7 +194,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->rollBack();
             }
 
-            error_log('Member registration error: ' . $e->getMessage());
+            error_log(
+                'Member registration error: ' . $e->getMessage()
+            );
 
             $errors[] = 'Unable to register member. Please check the database structure and try again.';
         }
@@ -219,7 +220,7 @@ function addEscape($value): string
 
 /*
 |--------------------------------------------------------------------------
-| SHARED HEADER
+| SHARED HEADER AND SIDEBAR
 |--------------------------------------------------------------------------
 */
 
@@ -227,559 +228,295 @@ require_once __DIR__ . '/../includes/header.php';
 
 ?>
 
-<style>
-
-/* PAGE LAYOUT */
-
-.main-content {
-    flex: 1;
-    min-width: 0;
-    min-height: 100vh;
-    padding: 35px;
-    background: #F8F5ED;
-    color: #172C46;
-    font-family: 'Inter', sans-serif;
-}
-
-/* PAGE HEADING */
-
-.page-heading {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 20px;
-    margin-bottom: 25px;
-}
-
-.page-heading h1 {
-    font-family: 'Cinzel', serif;
-    font-size: 25px;
-    margin: 0 0 8px;
-    color: #172C46;
-}
-
-.page-heading p {
-    color: #888;
-    font-size: 12px;
-    margin: 0;
-}
-
-.page-eyebrow {
-    display: block;
-    margin-bottom: 8px;
-    color: #B18A43;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 2px;
-}
-
-/* FORM PANEL */
-
-.form-panel {
-    background: #FFFFFF;
-    border: 1px solid #E9E1D3;
-    border-radius: 10px;
-    padding: 28px;
-    max-width: 900px;
-    box-shadow: 0 4px 15px rgba(23, 44, 70, 0.03);
-}
-
-.form-section-title {
-    font-family: 'Cinzel', serif;
-    font-size: 15px;
-    color: #172C46;
-    margin: 0 0 20px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #EEE7DA;
-}
-
-.form-section-title:not(:first-child) {
-    margin-top: 28px;
-}
-
-/* FORM GRID */
-
-.form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-}
-
-.form-group {
-    margin-bottom: 18px;
-    min-width: 0;
-}
-
-.form-group.full-width {
-    grid-column: 1 / -1;
-}
-
-.form-group label {
-    display: block;
-    font-size: 12px;
-    font-weight: 600;
-    color: #34445A;
-    margin-bottom: 8px;
-}
-
-.required {
-    color: #A64A40;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 12px;
-    border: 1px solid #DDD5C8;
-    border-radius: 6px;
-    font-family: inherit;
-    font-size: 12px;
-    background: #FFFFFF;
-    color: #172C46;
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    border-color: #B18A43;
-    box-shadow: 0 0 0 3px rgba(177, 138, 67, 0.12);
-}
-
-.form-group textarea {
-    resize: vertical;
-    min-height: 85px;
-}
-
-.form-hint {
-    display: block;
-    margin-top: 6px;
-    color: #999;
-    font-size: 10px;
-}
-
-/* QR NOTICE */
-
-.qr-notice {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    padding: 17px;
-    margin-top: 25px;
-    border: 1px solid #E8D8B5;
-    border-radius: 8px;
-    background: #FBF7ED;
-}
-
-.qr-notice-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
-    background: #F0E5CC;
-    color: #8B682F;
-    font-size: 21px;
-}
-
-.qr-notice h4 {
-    margin: 0 0 5px;
-    color: #172C46;
-    font-size: 12px;
-}
-
-.qr-notice p {
-    margin: 0;
-    color: #777;
-    font-size: 11px;
-    line-height: 1.7;
-}
-
-/* ERROR BOX */
-
-.error-box {
-    padding: 14px 16px;
-    margin-bottom: 20px;
-    border: 1px solid #F0D0CC;
-    border-radius: 6px;
-    background: #FFF0EF;
-    color: #963E35;
-    font-size: 12px;
-    line-height: 1.8;
-}
-
-/* FORM BUTTONS */
-
-.form-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-    margin-top: 25px;
-    padding-top: 20px;
-    border-top: 1px solid #EEE7DA;
-}
-
-.btn-save,
-.btn-cancel {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px 20px;
-    border: none;
-    border-radius: 6px;
-    font-family: inherit;
-    font-size: 11px;
-    font-weight: 700;
-    text-decoration: none;
-    cursor: pointer;
-    transition: 0.2s;
-}
-
-.btn-save {
-    background: #172C46;
-    color: #FFFFFF;
-}
-
-.btn-save:hover {
-    background: #243F60;
-}
-
-.btn-cancel {
-    background: #EEEAE2;
-    color: #555;
-}
-
-.btn-cancel:hover {
-    background: #E3DDD2;
-}
-
-/* RESPONSIVE DESIGN */
-
-@media (max-width: 768px) {
-
-    .main-content {
-        padding: 22px 15px;
-    }
-
-    .form-panel {
-        padding: 20px;
-    }
-
-    .form-grid {
-        grid-template-columns: 1fr;
-        gap: 5px;
-    }
-
-    .form-group.full-width {
-        grid-column: auto;
-    }
-
-    .page-heading {
-        flex-direction: column;
-    }
-}
-
-@media (max-width: 480px) {
-
-    .form-actions {
-        flex-direction: column-reverse;
-    }
-
-    .btn-save,
-    .btn-cancel {
-        width: 100%;
-        box-sizing: border-box;
-    }
-}
-
-</style>
+<!-- =====================================================
+     ADD MEMBER PAGE
+===================================================== -->
 
 <main class="main-content">
 
-    <!-- PAGE HEADING -->
+    <div class="content-container">
 
-    <div class="page-heading">
+        <!-- PAGE HEADING -->
 
-        <div>
+        <div class="page-heading">
 
-            <span class="page-eyebrow">
-                MEMBER MANAGEMENT
-            </span>
+            <div>
+                <span class="page-eyebrow">
+                    MEMBER MANAGEMENT
+                </span>
 
-            <h1>Register New Member</h1>
+                <h1>Register New Member</h1>
 
-            <p>
-                Add a new altar server to the ministry records.
-            </p>
+                <p>
+                    Add a new altar server to the ministry records.
+                </p>
+            </div>
 
         </div>
 
-    </div>
+        <!-- REGISTRATION FORM PANEL -->
 
-    <section class="form-panel">
+        <section class="form-panel">
 
-        <!-- ERROR MESSAGES -->
+            <!-- ERROR MESSAGES -->
 
-        <?php if (!empty($errors)): ?>
+            <?php if (!empty($errors)): ?>
 
-            <div class="error-box">
+                <div class="error-box">
 
-                <strong>Please correct the following:</strong>
+                    <strong>Please correct the following:</strong>
 
-                <?php foreach ($errors as $error): ?>
+                    <?php foreach ($errors as $error): ?>
 
-                    <div>
-                        • <?= addEscape($error) ?>
+                        <div>
+                            • <?= addEscape($error) ?>
+                        </div>
+
+                    <?php endforeach; ?>
+
+                </div>
+
+            <?php endif; ?>
+
+            <!-- REGISTRATION FORM -->
+
+            <form method="POST" data-prevent-double-submit>
+
+                <?= csrfField() ?>
+
+                <!-- PERSONAL INFORMATION -->
+
+                <h3 class="form-section-title">
+                    Personal Information
+                </h3>
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+
+                        <label>
+                            First Name <span class="required">*</span>
+                        </label>
+
+                        <input
+                            type="text"
+                            name="first_name"
+                            maxlength="100"
+                            placeholder="Enter first name"
+                            autocomplete="given-name"
+                            required
+                            value="<?= addEscape($firstName) ?>"
+                        >
+
                     </div>
 
-                <?php endforeach; ?>
+                    <div class="form-group">
 
-            </div>
+                        <label>Middle Name</label>
 
-        <?php endif; ?>
-
-        <!-- REGISTRATION FORM -->
-
-        <form method="POST" data-prevent-double-submit>
-
-            <?= csrfField() ?>
-
-            <!-- PERSONAL INFORMATION -->
-
-            <h3 class="form-section-title">
-                Personal Information
-            </h3>
-
-            <div class="form-grid">
-
-                <div class="form-group">
-
-                    <label>
-                        First Name <span class="required">*</span>
-                    </label>
-
-                    <input
-                        type="text"
-                        name="first_name"
-                        maxlength="100"
-                        placeholder="Enter first name"
-                        autocomplete="given-name"
-                        required
-                        value="<?= addEscape($firstName) ?>"
-                    >
-
-                </div>
-
-                <div class="form-group">
-
-                    <label>Middle Name</label>
-
-                    <input
-                        type="text"
-                        name="middle_name"
-                        maxlength="100"
-                        placeholder="Enter middle name"
-                        autocomplete="additional-name"
-                        value="<?= addEscape($middleName) ?>"
-                    >
-
-                </div>
-
-                <div class="form-group">
-
-                    <label>
-                        Last Name <span class="required">*</span>
-                    </label>
-
-                    <input
-                        type="text"
-                        name="last_name"
-                        maxlength="100"
-                        placeholder="Enter last name"
-                        autocomplete="family-name"
-                        required
-                        value="<?= addEscape($lastName) ?>"
-                    >
-
-                </div>
-
-                <div class="form-group">
-
-                    <label>
-                        Sex <span class="required">*</span>
-                    </label>
-
-                    <select name="sex" required>
-
-                        <option value="">Select sex</option>
-
-                        <option
-                            value="Male"
-                            <?= $sex === 'Male' ? 'selected' : '' ?>
+                        <input
+                            type="text"
+                            name="middle_name"
+                            maxlength="100"
+                            placeholder="Enter middle name"
+                            autocomplete="additional-name"
+                            value="<?= addEscape($middleName) ?>"
                         >
-                            Male
-                        </option>
 
-                        <option
-                            value="Female"
-                            <?= $sex === 'Female' ? 'selected' : '' ?>
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>
+                            Last Name <span class="required">*</span>
+                        </label>
+
+                        <input
+                            type="text"
+                            name="last_name"
+                            maxlength="100"
+                            placeholder="Enter last name"
+                            autocomplete="family-name"
+                            required
+                            value="<?= addEscape($lastName) ?>"
                         >
-                            Female
-                        </option>
 
-                    </select>
+                    </div>
 
-                </div>
+                    <div class="form-group">
 
-                <div class="form-group">
+                        <label>
+                            Sex <span class="required">*</span>
+                        </label>
 
-                    <label>Birth Date</label>
+                        <select name="sex" required>
 
-                    <input
-                        type="date"
-                        name="birth_date"
-                        max="<?= date('Y-m-d') ?>"
-                        value="<?= addEscape($birthDate) ?>"
-                    >
+                            <option value="">Select sex</option>
 
-                </div>
+                            <option
+                                value="Male"
+                                <?= $sex === 'Male' ? 'selected' : '' ?>
+                            >
+                                Male
+                            </option>
 
-                <div class="form-group full-width">
+                            <option
+                                value="Female"
+                                <?= $sex === 'Female' ? 'selected' : '' ?>
+                            >
+                                Female
+                            </option>
 
-                    <label>Address</label>
+                        </select>
 
-                    <textarea
-                        name="address"
-                        maxlength="255"
-                        placeholder="Enter complete address"
-                    ><?= addEscape($address) ?></textarea>
+                    </div>
 
-                </div>
+                    <div class="form-group">
 
-            </div>
+                        <label>Birth Date</label>
 
-            <!-- CONTACT INFORMATION -->
-
-            <h3 class="form-section-title">
-                Contact Information
-            </h3>
-
-            <div class="form-grid">
-
-                <div class="form-group">
-
-                    <label>Contact Number</label>
-
-                    <input
-                        type="tel"
-                        name="contact_number"
-                        maxlength="30"
-                        placeholder="Enter contact number"
-                        autocomplete="tel"
-                        value="<?= addEscape($contactNumber) ?>"
-                    >
-
-                </div>
-
-                <div class="form-group">
-
-                    <label>Email Address</label>
-
-                    <input
-                        type="email"
-                        name="email"
-                        maxlength="150"
-                        placeholder="Enter email address"
-                        autocomplete="email"
-                        value="<?= addEscape($email) ?>"
-                    >
-
-                </div>
-
-                <div class="form-group">
-
-                    <label>Member Status</label>
-
-                    <select name="member_status">
-
-                        <option
-                            value="Active"
-                            <?= $memberStatus === 'Active' ? 'selected' : '' ?>
+                        <input
+                            type="date"
+                            name="birth_date"
+                            max="<?= date('Y-m-d') ?>"
+                            value="<?= addEscape($birthDate) ?>"
                         >
-                            Active
-                        </option>
 
-                        <option
-                            value="Inactive"
-                            <?= $memberStatus === 'Inactive' ? 'selected' : '' ?>
+                    </div>
+
+                    <div class="form-group full-width">
+
+                        <label>Address</label>
+
+                        <textarea
+                            name="address"
+                            maxlength="255"
+                            placeholder="Enter complete address"
+                        ><?= addEscape($address) ?></textarea>
+
+                    </div>
+
+                </div>
+
+                <!-- CONTACT INFORMATION -->
+
+                <h3 class="form-section-title">
+                    Contact Information
+                </h3>
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+
+                        <label>Contact Number</label>
+
+                        <input
+                            type="tel"
+                            name="contact_number"
+                            maxlength="30"
+                            placeholder="Enter contact number"
+                            autocomplete="tel"
+                            value="<?= addEscape($contactNumber) ?>"
                         >
-                            Inactive
-                        </option>
 
-                    </select>
+                    </div>
 
-                    <small class="form-hint">
-                        Only active members are eligible for QR attendance.
-                    </small>
+                    <div class="form-group">
+
+                        <label>Email Address</label>
+
+                        <input
+                            type="email"
+                            name="email"
+                            maxlength="150"
+                            placeholder="Enter email address"
+                            autocomplete="email"
+                            value="<?= addEscape($email) ?>"
+                        >
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>Member Status</label>
+
+                        <select name="member_status">
+
+                            <option
+                                value="Active"
+                                <?= $memberStatus === 'Active' ? 'selected' : '' ?>
+                            >
+                                Active
+                            </option>
+
+                            <option
+                                value="Inactive"
+                                <?= $memberStatus === 'Inactive' ? 'selected' : '' ?>
+                            >
+                                Inactive
+                            </option>
+
+                        </select>
+
+                        <small class="form-hint">
+                            Only active members are eligible for QR attendance.
+                        </small>
+
+                    </div>
 
                 </div>
 
-            </div>
+                <!-- QR CODE INFORMATION -->
 
-            <!-- PERMANENT QR CODE INFORMATION -->
+                <div class="qr-notice">
 
-            <div class="qr-notice">
+                    <div class="qr-notice-icon">
+                        ▦
+                    </div>
 
-                <div class="qr-notice-icon">
-                    ▦
+                    <div>
+
+                        <h4>Permanent QR Code Registration</h4>
+
+                        <p>
+                            A unique permanent QR security token will
+                            automatically be generated when this member
+                            is registered. The member will use the same
+                            QR code for every Sunday Mass attendance.
+                            After registration, the system will open the
+                            member's QR identification card, where it
+                            can be viewed and printed.
+                        </p>
+
+                    </div>
+
                 </div>
 
-                <div>
+                <!-- FORM ACTIONS -->
 
-                    <h4>Permanent QR Code Registration</h4>
+                <div class="form-actions">
 
-                    <p>
-                        A unique permanent QR security token will automatically
-                        be generated when this member is registered.
-                        The member will use the same QR code for every Sunday
-                        Mass attendance. After registration, the system will
-                        open the member's QR identification card, where it can
-                        be viewed and printed.
-                    </p>
+                    <a
+                        href="/index.php"
+                        class="btn-cancel"
+                    >
+                        CANCEL
+                    </a>
+
+                    <button
+                        type="submit"
+                        class="btn-save"
+                    >
+                        REGISTER MEMBER
+                    </button>
 
                 </div>
 
-            </div>
+            </form>
 
-            <!-- FORM ACTIONS -->
+        </section>
 
-            <div class="form-actions">
-
-                <a
-                    href="index.php"
-                    class="btn-cancel"
-                >
-                    CANCEL
-                </a>
-
-                <button
-                    type="submit"
-                    class="btn-save"
-                >
-                    REGISTER MEMBER
-                </button>
-
-            </div>
-
-        </form>
-
-    </section>
+    </div>
 
 </main>
 
