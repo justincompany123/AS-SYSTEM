@@ -1,4 +1,3 @@
-
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -9,9 +8,11 @@
 |--------------------------------------------------------------------------
 */
 
+// AUTHENTICATION
 require_once __DIR__ . '/../includes/auth.php';
 requireLogin();
 
+// DATABASE
 require_once __DIR__ . '/../config/database.php';
 
 /*
@@ -20,7 +21,11 @@ require_once __DIR__ . '/../config/database.php';
 |--------------------------------------------------------------------------
 */
 
-$memberId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+$memberId = filter_input(
+    INPUT_GET,
+    'id',
+    FILTER_VALIDATE_INT
+);
 
 if (!$memberId || $memberId <= 0) {
     http_response_code(400);
@@ -76,10 +81,13 @@ try {
 
 } catch (PDOException $e) {
 
-    error_log('QR card database error: ' . $e->getMessage());
+    error_log(
+        'QR card database error: ' . $e->getMessage()
+    );
 
     http_response_code(500);
     exit('Unable to retrieve member information.');
+
 }
 
 /*
@@ -103,7 +111,7 @@ $qrToken = $member['qr_token'] ?? '';
 
 if (
     !is_string($qrToken) ||
-    !preg_match('/^[a-f0-9]{64}$/', $qrToken)
+    !preg_match('/^[a-f0-9]{64}$/i', $qrToken)
 ) {
     http_response_code(500);
     exit('This member does not have a valid QR token.');
@@ -118,8 +126,23 @@ if (
 $pageTitle = 'Permanent Member QR Card';
 $activePage = 'members';
 
-$fullName = $member['full_name'];
-$memberCode = $member['member_code'];
+// Escape member information.
+$fullName = qrEscape($member['full_name']);
+$memberCode = qrEscape($member['member_code']);
+
+// Safely encode QR token for JavaScript.
+$qrTokenJson = json_encode(
+    $qrToken,
+    JSON_HEX_TAG |
+    JSON_HEX_APOS |
+    JSON_HEX_AMP |
+    JSON_HEX_QUOT
+);
+
+if ($qrTokenJson === false) {
+    http_response_code(500);
+    exit('Unable to prepare the QR code.');
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -140,16 +163,20 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="page-heading">
 
             <div>
+
                 <span class="page-eyebrow">
                     MEMBER MANAGEMENT
                 </span>
 
-                <h1>Permanent Member QR Card</h1>
+                <h1>
+                    Permanent Member QR Card
+                </h1>
 
                 <p>
                     This QR code remains assigned to this member
                     for future Sunday Mass attendance.
                 </p>
+
             </div>
 
         </div>
@@ -162,8 +189,10 @@ require_once __DIR__ . '/../includes/header.php';
         ): ?>
 
             <div class="success-message">
+
                 Member successfully registered!
                 Permanent QR code generated.
+
             </div>
 
         <?php endif; ?>
@@ -174,23 +203,27 @@ require_once __DIR__ . '/../includes/header.php';
 
             <div class="qr-card-header">
 
-                <h2>ST. FRANCIS XAVIER CATHEDRAL</h2>
+                <h2>
+                    ST. FRANCIS XAVIER CATHEDRAL
+                </h2>
 
-                <p>MINISTRY OF ALTAR SERVERS</p>
+                <p>
+                    MINISTRY OF ALTAR SERVERS
+                </p>
 
             </div>
 
             <div class="qr-card-body">
 
                 <p class="qr-member-name">
-                    <?= qrEscape($fullName) ?>
+                    <?= $fullName ?>
                 </p>
 
                 <div class="qr-member-code">
-                    <?= qrEscape($memberCode) ?>
+                    <?= $memberCode ?>
                 </div>
 
-                <!-- QR CODE -->
+                <!-- QR CODE CONTAINER -->
 
                 <div
                     id="memberQRCode"
@@ -198,7 +231,11 @@ require_once __DIR__ . '/../includes/header.php';
                     aria-label="Permanent member QR code"
                     role="img"
                 >
-                    <span>Generating QR code...</span>
+
+                    <span>
+                        Generating QR code...
+                    </span>
+
                 </div>
 
                 <div class="qr-card-note">
@@ -238,7 +275,7 @@ require_once __DIR__ . '/../includes/header.php';
 
             <a
                 class="qr-back"
-                href="/members/"
+                href="/members/add.php"
             >
                 BACK TO MEMBERS
             </a>
@@ -254,17 +291,16 @@ require_once __DIR__ . '/../includes/header.php';
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <script>
+
 document.addEventListener('DOMContentLoaded', function () {
 
     const qrContainer = document.getElementById('memberQRCode');
 
-    const permanentToken = <?= json_encode(
-        $qrToken,
-        JSON_HEX_TAG |
-        JSON_HEX_APOS |
-        JSON_HEX_AMP |
-        JSON_HEX_QUOT
-    ) ?>;
+    const permanentToken = <?= $qrTokenJson ?>;
+
+    if (!qrContainer) {
+        return;
+    }
 
     if (typeof QRCode === 'undefined') {
 
@@ -277,18 +313,27 @@ document.addEventListener('DOMContentLoaded', function () {
     qrContainer.innerHTML = '';
 
     new QRCode(qrContainer, {
+
         text: permanentToken,
+
         width: 210,
+
         height: 210,
+
         colorDark: '#172C46',
+
         colorLight: '#FFFFFF',
+
         correctLevel: QRCode.CorrectLevel.H
+
     });
 
 });
+
 </script>
 
 <?php
+
 /*
 |--------------------------------------------------------------------------
 | SHARED FOOTER
@@ -296,4 +341,5 @@ document.addEventListener('DOMContentLoaded', function () {
 */
 
 require_once __DIR__ . '/../includes/footer.php';
+
 ?>

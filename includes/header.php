@@ -2,16 +2,14 @@
 /*
 |--------------------------------------------------------------------------
 | ALTAR SERVERS WEB SYSTEM
-| Shared Page Header
-| St. Francis Xavier Cathedral
+| SHARED PAGE HEADER
+| ST. FRANCIS XAVIER CATHEDRAL
 | Theme: Cathedral Navy, Gold, and Ivory
 |--------------------------------------------------------------------------
 */
 
-// Start session if not already started.
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Session is managed by includes/auth.php.
+// Do not call session_start() here.
 
 // Default page information.
 $pageTitle = $pageTitle ?? 'Dashboard';
@@ -22,13 +20,17 @@ $adminName = $_SESSION['admin_name']
     ?? $_SESSION['username']
     ?? 'Administrator';
 
+$adminName = (string) $adminName;
+
 $safeAdminName = htmlspecialchars(
     $adminName,
     ENT_QUOTES,
     'UTF-8'
 );
 
-$adminInitial = strtoupper(substr(trim($adminName), 0, 1));
+$adminInitial = strtoupper(
+    substr(trim($adminName), 0, 1)
+);
 
 if ($adminInitial === '') {
     $adminInitial = 'A';
@@ -46,7 +48,10 @@ if ($adminInitial === '') {
 
     <meta name="theme-color" content="#172C46">
 
-    <meta name="description" content="St. Francis Xavier Cathedral Ministry of Altar Servers Management System">
+    <meta
+        name="description"
+        content="St. Francis Xavier Cathedral Ministry of Altar Servers Management System"
+    >
 
     <title>
         <?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?>
@@ -57,7 +62,11 @@ if ($adminInitial === '') {
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
 
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
 
     <link
         href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
@@ -68,7 +77,7 @@ if ($adminInitial === '') {
 
     <link
         rel="stylesheet"
-        href="/AS-SYSTEM/assets/css/style.css"
+        href="/assets/css/style.css"
     >
 
     <!-- PRINT CSS -->
@@ -77,7 +86,7 @@ if ($adminInitial === '') {
 
         <link
             rel="stylesheet"
-            href="/AS-SYSTEM/assets/css/print.css"
+            href="/assets/css/print.css"
         >
 
     <?php endif; ?>
@@ -88,7 +97,11 @@ if ($adminInitial === '') {
 
         <link
             rel="stylesheet"
-            href="<?= htmlspecialchars($additionalStylesheet, ENT_QUOTES, 'UTF-8') ?>"
+            href="<?= htmlspecialchars(
+                $additionalStylesheet,
+                ENT_QUOTES,
+                'UTF-8'
+            ) ?>"
         >
 
     <?php endif; ?>
@@ -101,23 +114,25 @@ if ($adminInitial === '') {
 
     <div class="app-layout">
 
-        <!-- SIDEBAR OVERLAY FOR MOBILE -->
+        <!-- MOBILE SIDEBAR OVERLAY -->
 
         <div class="sidebar-overlay"></div>
 
         <!-- SIDEBAR -->
 
         <?php
+
         $sidebarFile = __DIR__ . '/sidebar.php';
 
         if (file_exists($sidebarFile)) {
             require_once $sidebarFile;
         }
+
         ?>
 
-        <!-- MAIN CONTENT AREA -->
+        <!-- MAIN APPLICATION CONTENT -->
 
-        <div class="application-content" style="flex: 1; min-width: 0;">
+        <div class="application-content">
 
             <!-- TOP NAVIGATION BAR -->
 
@@ -125,7 +140,7 @@ if ($adminInitial === '') {
 
                 <!-- LEFT SIDE -->
 
-                <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="topbar-left">
 
                     <!-- MOBILE MENU BUTTON -->
 
@@ -138,15 +153,15 @@ if ($adminInitial === '') {
                         ☰
                     </button>
 
-                    <!-- CATHEDRAL NAME -->
+                    <!-- CATHEDRAL INFORMATION -->
 
-                    <div>
+                    <div class="cathedral-heading">
 
                         <div class="topbar-title">
                             ST. FRANCIS XAVIER CATHEDRAL
                         </div>
 
-                        <div style="font-size: 10px; color: #888;">
+                        <div class="topbar-subtitle">
                             Ministry of Altar Servers
                         </div>
 
@@ -159,23 +174,34 @@ if ($adminInitial === '') {
                 <div class="admin-profile">
 
                     <div class="admin-avatar">
-                        <?= htmlspecialchars($adminInitial, ENT_QUOTES, 'UTF-8') ?>
+                        <?= htmlspecialchars(
+                            $adminInitial,
+                            ENT_QUOTES,
+                            'UTF-8'
+                        ) ?>
                     </div>
 
-                    <div>
+                    <div class="admin-information">
 
                         <strong>
                             <?= $safeAdminName ?>
                         </strong>
 
-                        <div style="font-size: 10px; color: #888;">
+                        <div class="admin-role">
                             Administrator
                         </div>
 
                     </div>
 
+                    <a
+                        href="/logout.php"
+                        class="header-logout"
+                    >
+                        Logout
+                    </a>
+
                 </div>
 
             </header>
 
-            <!-- PAGE CONTENT STARTS BELOW -->
+            <!-- PAGE CONTENT STARTS HERE -->
