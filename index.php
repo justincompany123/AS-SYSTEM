@@ -450,7 +450,7 @@ $adminInitial = strtoupper(
                     <!-- MEMBERS -->
 
                     <a
-                        href="/members/add_members.php"
+                        href="/members/add.php"
                         class="module-card"
                     >
 
