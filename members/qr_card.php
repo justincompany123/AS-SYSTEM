@@ -1,3 +1,4 @@
+
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -126,11 +127,15 @@ if (
 $pageTitle = 'Permanent Member QR Card';
 $activePage = 'members';
 
-// Escape member information.
 $fullName = qrEscape($member['full_name']);
 $memberCode = qrEscape($member['member_code']);
 
-// Safely encode QR token for JavaScript.
+/*
+|--------------------------------------------------------------------------
+| SAFELY ENCODE QR TOKEN
+|--------------------------------------------------------------------------
+*/
+
 $qrTokenJson = json_encode(
     $qrToken,
     JSON_HEX_TAG |
@@ -223,7 +228,7 @@ require_once __DIR__ . '/../includes/header.php';
                     <?= $memberCode ?>
                 </div>
 
-                <!-- QR CODE CONTAINER -->
+                <!-- QR CODE -->
 
                 <div
                     id="memberQRCode"
@@ -273,11 +278,13 @@ require_once __DIR__ . '/../includes/header.php';
                 PRINT QR CARD
             </button>
 
+            <!-- CORRECTED BACK LINK -->
+
             <a
                 class="qr-back"
                 href="/members/add.php"
             >
-                BACK TO MEMBERS
+                BACK TO ADD MEMBER
             </a>
 
         </div>
@@ -294,7 +301,8 @@ require_once __DIR__ . '/../includes/header.php';
 
 document.addEventListener('DOMContentLoaded', function () {
 
-    const qrContainer = document.getElementById('memberQRCode');
+    const qrContainer =
+        document.getElementById('memberQRCode');
 
     const permanentToken = <?= $qrTokenJson ?>;
 
