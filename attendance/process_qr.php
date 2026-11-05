@@ -2,10 +2,16 @@
 /*
 |--------------------------------------------------------------------------
 | ALTAR SERVERS MANAGEMENT SYSTEM
-| ATTENDANCE PROCESSING ENDPOINT
+| ATTENDANCE PROCESSOR
 | SUPABASE POSTGRESQL VERSION
+| St. Francis Xavier Cathedral
 |--------------------------------------------------------------------------
 */
+
+// Prevent accidental output before JSON headers.
+if (ob_get_level() === 0) {
+    ob_start();
+}
 
 require_once __DIR__ . '/../includes/auth.php';
 requireLogin();
@@ -14,30 +20,56 @@ require_once __DIR__ . '/../config/database.php';
 
 date_default_timezone_set('Asia/Manila');
 
-header('Content-Type: application/json; charset=UTF-8');
+/*
+|--------------------------------------------------------------------------
+| START SESSION
+|--------------------------------------------------------------------------
+*/
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+/*
+|--------------------------------------------------------------------------
+| JSON RESPONSE FUNCTION
+|--------------------------------------------------------------------------
+*/
 
 function sendAttendanceResponse(
     bool $success,
     string $message,
     array $extra = [],
-    int $httpCode = 200
+    int $httpStatus = 200
 ): void {
-    http_response_code($httpCode);
+
+    // Remove accidental output from included PHP files.
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
+    http_response_code($httpStatus);
+
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('X-Content-Type-Options: nosniff');
 
     echo json_encode(
         array_merge([
             'success' => $success,
             'message' => $message
         ], $extra),
-        JSON_UNESCAPED_UNICODE
+        JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
     );
 
     exit;
 }
 
-// =====================================================
-// REQUEST VALIDATION
-// =====================================================
+/*
+|--------------------------------------------------------------------------
+| REQUEST METHOD VALIDATION
+|--------------------------------------------------------------------------
+*/
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendAttendanceResponse(
@@ -48,36 +80,69 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     );
 }
 
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
+/*
+|--------------------------------------------------------------------------
+| CSRF TOKEN VALIDATION
+|--------------------------------------------------------------------------
+*/
 
-// Verify CSRF token.
 $sessionToken = $_SESSION['csrf_token'] ?? '';
 $submittedToken = $_POST['csrf_token'] ?? '';
 
 if (
-    empty($sessionToken) ||
-    empty($submittedToken) ||
+    !is_string($sessionToken) ||
+    !is_string($submittedToken) ||
+    $sessionToken === '' ||
     !hash_equals($sessionToken, $submittedToken)
 ) {
     sendAttendanceResponse(
         false,
-        'Your session token is invalid. Refresh the page and try again.',
+        'Your session has expired. Please refresh the page and try again.',
         [],
         403
     );
 }
 
-// =====================================================
-// INPUT VALUES
-// =====================================================
+/*
+|--------------------------------------------------------------------------
+| DATABASE CONNECTION VALIDATION
+|--------------------------------------------------------------------------
+|
+| config/database.php must provide a PDO connection named $pdo.
+|
+*/
 
-$action = trim($_POST['action'] ?? '');
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    error_log('Attendance Error: PDO database connection unavailable.');
 
-$massDate = trim($_POST['mass_date'] ?? '');
+    sendAttendanceResponse(
+        false,
+        'Database connection failed. Please contact the administrator.',
+        [],
+        500
+    );
+}
 
-$massTime = trim($_POST['mass_time'] ?? '');
+/*
+|--------------------------------------------------------------------------
+| PDO ERROR MODE
+|--------------------------------------------------------------------------
+*/
+
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+/*
+|--------------------------------------------------------------------------
+| ALLOWED VALUES
+|--------------------------------------------------------------------------
+*/
+
+$allowedActions = [
+    'search',
+    'record_qr',
+    'record_manual'
+];
 
 $allowedMassTimes = [
     '6:00 AM',
@@ -86,11 +151,20 @@ $allowedMassTimes = [
     '5:00 PM'
 ];
 
-if (!in_array($action, [
-    'search',
-    'record_manual',
-    'record_qr'
-], true)) {
+$allowedAttendanceStatuses = [
+    'Present',
+    'Excused'
+];
+
+/*
+|--------------------------------------------------------------------------
+| GET ACTION
+|--------------------------------------------------------------------------
+*/
+
+$action = trim((string)($_POST['action'] ?? ''));
+
+if (!in_array($action, $allowedActions, true)) {
     sendAttendanceResponse(
         false,
         'Invalid attendance action.',
@@ -99,260 +173,278 @@ if (!in_array($action, [
     );
 }
 
-if (
-    !preg_match('/^\d{4}-\d{2}-\d{2}$/', $massDate) ||
-    !checkdate(
-        (int) substr($massDate, 5, 2),
-        (int) substr($massDate, 8, 2),
-        (int) substr($massDate, 0, 4)
-    )
-) {
-    sendAttendanceResponse(
-        false,
-        'Please select a valid attendance date.',
-        [],
-        400
-    );
-}
-
-if (!in_array($massTime, $allowedMassTimes, true)) {
-    sendAttendanceResponse(
-        false,
-        'Please select a valid Mass schedule.',
-        [],
-        400
-    );
-}
-
-// =====================================================
-// SEARCH ACTIVE MEMBERS
-// =====================================================
+/*
+|--------------------------------------------------------------------------
+| SEARCH MEMBERS
+|--------------------------------------------------------------------------
+*/
 
 if ($action === 'search') {
 
-    $search = trim($_POST['search'] ?? '');
+    $search = trim((string)($_POST['search'] ?? ''));
 
     if (mb_strlen($search) < 2) {
         sendAttendanceResponse(
-            true,
-            'Enter at least two characters.',
-            [
-                'members' => []
-            ]
+            false,
+            'Please enter at least two characters.'
         );
     }
 
     try {
 
-        $sql = "
+        $stmt = $pdo->prepare("
             SELECT
                 id,
                 member_code,
                 full_name
-
             FROM public.members
-
-            WHERE status = 'Active'
-
-            AND (
-                full_name ILIKE :name
-                OR member_code ILIKE :code
-            )
-
+            WHERE LOWER(TRIM(status::text)) = 'active'
+              AND (
+                    full_name ILIKE :search_name
+                    OR member_code ILIKE :search_code
+              )
             ORDER BY full_name ASC
+            LIMIT 20
+        ");
 
-            LIMIT 30
-        ";
-
-        $stmt = $pdo->prepare($sql);
+        $searchValue = '%' . $search . '%';
 
         $stmt->execute([
-            ':name' => '%' . $search . '%',
-            ':code' => '%' . $search . '%'
+            ':search_name' => $searchValue,
+            ':search_code' => $searchValue
         ]);
 
-        $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $members = $stmt->fetchAll();
 
         sendAttendanceResponse(
             true,
-            'Member search completed.',
+            count($members) > 0
+                ? 'Members found.'
+                : 'No active members found.',
             [
                 'members' => $members
             ]
         );
 
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
 
-        error_log(
-            'Attendance Member Search Error: ' . $e->getMessage()
-        );
+        error_log('Member Search Error: ' . $e->getMessage());
 
         sendAttendanceResponse(
             false,
-            'Unable to search members. Please check the database.',
+            'Unable to search members. Please try again.',
             [],
             500
         );
     }
 }
 
-// =====================================================
-// GET MEMBER INFORMATION
-// =====================================================
+/*
+|--------------------------------------------------------------------------
+| VALIDATE MASS DATE
+|--------------------------------------------------------------------------
+*/
 
-$member = null;
+$massDate = trim((string)($_POST['mass_date'] ?? ''));
+
+$dateObject = DateTimeImmutable::createFromFormat(
+    '!Y-m-d',
+    $massDate,
+    new DateTimeZone('Asia/Manila')
+);
+
+if (
+    !$dateObject ||
+    $dateObject->format('Y-m-d') !== $massDate
+) {
+    sendAttendanceResponse(
+        false,
+        'Invalid Mass date. Please select a valid date.'
+    );
+}
+
+if ($massDate > date('Y-m-d')) {
+    sendAttendanceResponse(
+        false,
+        'You cannot record attendance for a future date.'
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| VALIDATE MASS TIME
+|--------------------------------------------------------------------------
+*/
+
+$massTime = trim((string)($_POST['mass_time'] ?? ''));
+
+if (!in_array($massTime, $allowedMassTimes, true)) {
+    sendAttendanceResponse(
+        false,
+        'Invalid Mass schedule.'
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| FIND MEMBER
+|--------------------------------------------------------------------------
+*/
 
 try {
+
+    $member = null;
+
+    /*
+    |--------------------------------------------------------------------------
+    | QR CODE ATTENDANCE
+    |--------------------------------------------------------------------------
+    */
 
     if ($action === 'record_qr') {
 
-        $qrToken = trim($_POST['qr_token'] ?? '');
+        $qrToken = trim((string)($_POST['qr_token'] ?? ''));
 
+        // QR tokens must contain exactly 64 hexadecimal characters.
         if (!preg_match('/^[a-f0-9]{64}$/i', $qrToken)) {
             sendAttendanceResponse(
                 false,
-                'Invalid QR code.',
-                [],
-                400
+                'Invalid QR code. The QR token is not valid.'
             );
         }
 
-        $stmt = $pdo->prepare("
+        $memberStmt = $pdo->prepare("
             SELECT
                 id,
                 member_code,
                 full_name,
                 status
-
             FROM public.members
-
             WHERE qr_token = :qr_token
-
             LIMIT 1
         ");
 
-        $stmt->execute([
+        $memberStmt->execute([
             ':qr_token' => $qrToken
         ]);
 
-    } else {
+        $member = $memberStmt->fetch();
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | MANUAL ATTENDANCE
+    |--------------------------------------------------------------------------
+    */
+
+    elseif ($action === 'record_manual') {
 
         $memberId = filter_var(
-            $_POST['member_id'] ?? '',
+            $_POST['member_id'] ?? null,
             FILTER_VALIDATE_INT
         );
 
-        if (!$memberId || $memberId < 1) {
+        if (!$memberId || $memberId <= 0) {
             sendAttendanceResponse(
                 false,
-                'Please select a valid member.',
-                [],
-                400
+                'Invalid member ID.'
             );
         }
 
-        $stmt = $pdo->prepare("
+        $memberStmt = $pdo->prepare("
             SELECT
                 id,
                 member_code,
                 full_name,
                 status
-
             FROM public.members
-
             WHERE id = :member_id
-
             LIMIT 1
         ");
 
-        $stmt->execute([
+        $memberStmt->execute([
             ':member_id' => $memberId
         ]);
+
+        $member = $memberStmt->fetch();
     }
-
-    $member = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$member) {
-        sendAttendanceResponse(
-            false,
-            'Member not found.',
-            [],
-            404
-        );
-    }
-
-    if ($member['status'] !== 'Active') {
-        sendAttendanceResponse(
-            false,
-            'This member is not currently active.',
-            [],
-            400
-        );
-    }
-
-} catch (PDOException $e) {
-
-    error_log(
-        'Attendance Member Lookup Error: ' . $e->getMessage()
-    );
-
-    sendAttendanceResponse(
-        false,
-        'Unable to retrieve member information.',
-        [],
-        500
-    );
-}
-
-// =====================================================
-// DETERMINE ATTENDANCE STATUS AND METHOD
-// =====================================================
-
-if ($action === 'record_qr') {
-
-    // Scanning a valid member QR code records Present.
-    $attendanceStatus = 'Present';
-    $attendanceMethod = 'QR Code';
-
-} else {
-
-    $attendanceStatus = trim(
-        $_POST['attendance_status'] ?? ''
-    );
-
-    if (!in_array(
-        $attendanceStatus,
-        ['Present', 'Excused'],
-        true
-    )) {
-        sendAttendanceResponse(
-            false,
-            'Only Present or Excused attendance is allowed.',
-            [],
-            400
-        );
-    }
-
-    $attendanceMethod = 'Manual';
-}
-
-// =====================================================
-// SAVE ATTENDANCE TO SUPABASE
-// =====================================================
-
-try {
 
     /*
-     * The unique constraint on
-     * (member_id, mass_date, mass_time)
-     * prevents duplicate attendance records.
-     *
-     * If the same member is recorded again for the
-     * same date and Mass schedule, the existing
-     * record is updated.
-     */
+    |--------------------------------------------------------------------------
+    | CHECK MEMBER EXISTENCE
+    |--------------------------------------------------------------------------
+    */
 
-    $sql = "
+    if (!$member) {
+
+        sendAttendanceResponse(
+            false,
+            $action === 'record_qr'
+                ? 'No member is associated with this QR code.'
+                : 'Member not found.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHECK MEMBER STATUS
+    |--------------------------------------------------------------------------
+    */
+
+    $memberStatus = strtolower(
+        trim((string)$member['status'])
+    );
+
+    if ($memberStatus !== 'active') {
+        sendAttendanceResponse(
+            false,
+            'This member is not active and cannot be recorded.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ATTENDANCE STATUS AND METHOD
+    |--------------------------------------------------------------------------
+    */
+
+    if ($action === 'record_qr') {
+
+        $attendanceStatus = 'Present';
+        $attendanceMethod = 'QR Code';
+
+    } else {
+
+        $attendanceStatus = trim(
+            (string)($_POST['attendance_status'] ?? 'Present')
+        );
+
+        if (!in_array(
+            $attendanceStatus,
+            $allowedAttendanceStatuses,
+            true
+        )) {
+            sendAttendanceResponse(
+                false,
+                'Invalid attendance status.'
+            );
+        }
+
+        $attendanceMethod = 'Manual';
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SAVE ATTENDANCE
+    |--------------------------------------------------------------------------
+    |
+    | Requires a UNIQUE constraint on:
+    | member_id, mass_date, mass_time
+    |
+    */
+
+    $insertStmt = $pdo->prepare("
         INSERT INTO public.mass_attendance (
             member_id,
             mass_date,
@@ -362,7 +454,6 @@ try {
             attendance_method,
             recorded_by
         )
-
         VALUES (
             :member_id,
             :mass_date,
@@ -372,31 +463,16 @@ try {
             :attendance_method,
             NULL
         )
-
-        ON CONFLICT (
-            member_id,
-            mass_date,
-            mass_time
-        )
-
-        DO UPDATE SET
-
-            attendance_status = EXCLUDED.attendance_status,
-
-            check_in_time = CURRENT_TIMESTAMP,
-
-            attendance_method = EXCLUDED.attendance_method
-
+        ON CONFLICT (member_id, mass_date, mass_time)
+        DO NOTHING
         RETURNING
             id,
             check_in_time,
             attendance_status,
             attendance_method
-    ";
+    ");
 
-    $stmt = $pdo->prepare($sql);
-
-    $stmt->execute([
+    $insertStmt->execute([
         ':member_id' => $member['id'],
         ':mass_date' => $massDate,
         ':mass_time' => $massTime,
@@ -404,52 +480,95 @@ try {
         ':attendance_method' => $attendanceMethod
     ]);
 
-    $attendance = $stmt->fetch(PDO::FETCH_ASSOC);
+    $attendance = $insertStmt->fetch();
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHECK DUPLICATE ATTENDANCE
+    |--------------------------------------------------------------------------
+    */
 
     if (!$attendance) {
+
+        $existingStmt = $pdo->prepare("
+            SELECT
+                id,
+                check_in_time,
+                attendance_status,
+                attendance_method
+            FROM public.mass_attendance
+            WHERE member_id = :member_id
+              AND mass_date = :mass_date
+              AND mass_time = :mass_time
+            LIMIT 1
+        ");
+
+        $existingStmt->execute([
+            ':member_id' => $member['id'],
+            ':mass_date' => $massDate,
+            ':mass_time' => $massTime
+        ]);
+
+        $existing = $existingStmt->fetch();
+
+        if ($existing) {
+
+            $existingCheckIn = $existing['check_in_time'];
+
+            if ($existingCheckIn !== null) {
+                $existingCheckIn = (new DateTimeImmutable($existingCheckIn))
+                    ->setTimezone(new DateTimeZone('Asia/Manila'))
+                    ->format('h:i:s A');
+            }
+
+            sendAttendanceResponse(
+                false,
+                'Attendance has already been recorded for this member and Mass schedule.',
+                [
+                    'member_name' => $member['full_name'],
+                    'member_code' => $member['member_code'],
+                    'mass_date' => $massDate,
+                    'mass_time' => $massTime,
+                    'attendance_status' => $existing['attendance_status'],
+                    'check_in_time' => $existingCheckIn,
+                    'attendance_method' => $existing['attendance_method'],
+                    'already_recorded' => true
+                ]
+            );
+        }
+
         sendAttendanceResponse(
             false,
-            'Attendance could not be saved.',
+            'Attendance could not be saved. Please try again.',
             [],
             500
         );
     }
 
-    // Convert database timestamp to Philippine time.
-    $checkInTime = '-';
+    /*
+    |--------------------------------------------------------------------------
+    | FORMAT CHECK-IN TIME
+    |--------------------------------------------------------------------------
+    */
 
-    if (!empty($attendance['check_in_time'])) {
+    $checkInTime = $attendance['check_in_time'];
 
-        try {
+    if ($checkInTime !== null) {
 
-            $timestamp = new DateTimeImmutable(
-                $attendance['check_in_time']
-            );
-
-            $timestamp = $timestamp->setTimezone(
-                new DateTimeZone('Asia/Manila')
-            );
-
-            $checkInTime = $timestamp->format('h:i A');
-
-        } catch (Throwable $e) {
-
-            $checkInTime = '-';
-
-        }
+        $checkInTime = (new DateTimeImmutable($checkInTime))
+            ->setTimezone(new DateTimeZone('Asia/Manila'))
+            ->format('h:i:s A');
     }
 
-    // =================================================
-    // SUCCESS RESPONSE
-    // =================================================
-
-    $message = $attendanceStatus === 'Present'
-        ? 'Attendance successfully recorded as Present.'
-        : 'Attendance successfully recorded as Excused.';
+    /*
+    |--------------------------------------------------------------------------
+    | SUCCESS RESPONSE
+    |--------------------------------------------------------------------------
+    */
 
     sendAttendanceResponse(
         true,
-        $message,
+        'Attendance recorded successfully.',
         [
             'attendance_id' => $attendance['id'],
             'member_id' => $member['id'],
@@ -457,22 +576,24 @@ try {
             'member_code' => $member['member_code'],
             'mass_date' => $massDate,
             'mass_time' => $massTime,
-            'attendance_status' => $attendanceStatus,
-            'attendance_method' => $attendanceMethod,
-            'check_in_time' => $checkInTime
+            'attendance_status' => $attendance['attendance_status'],
+            'check_in_time' => $checkInTime,
+            'attendance_method' => $attendance['attendance_method'],
+            'already_recorded' => false
         ]
     );
 
-} catch (PDOException $e) {
+} catch (Throwable $e) {
 
     error_log(
-        'Attendance Save Error: ' . $e->getMessage()
+        'Attendance Processing Error: ' . $e->getMessage()
     );
 
     sendAttendanceResponse(
         false,
-        'Unable to save attendance. Please check your database table and unique constraint.',
+        'A database error occurred while processing attendance. Check the server error logs.',
         [],
         500
     );
 }
+```
