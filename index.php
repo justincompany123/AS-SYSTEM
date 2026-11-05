@@ -6,17 +6,16 @@
 // MAIN ENTRY POINT
 // =====================================================
 
-// IMPORTANT: No HTML or whitespace before this PHP tag.
-
+// Start authentication and session
 require_once __DIR__ . '/includes/auth.php';
 
 // Check administrator login
 requireLogin();
 
-// Database connection
+// Connect to Supabase database
 require_once __DIR__ . '/config/database.php';
 
-// Current administrator information
+// Get current administrator information
 $adminName = htmlspecialchars(
     getAdminName(),
     ENT_QUOTES,
@@ -37,8 +36,11 @@ $adminName = htmlspecialchars(
 
     <title>Altar Servers Management System</title>
 
-    <link rel="stylesheet"
-          href="/assets/css/style.css">
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="assets/css/style.css">
+
+    <!-- Optional Favicon -->
+    <link rel="icon" type="image/png" href="assets/images/logo.png">
 
 </head>
 
@@ -46,6 +48,7 @@ $adminName = htmlspecialchars(
 
     <main class="main-content">
 
+        <!-- HEADER -->
         <header class="topbar">
 
             <div>
@@ -60,7 +63,7 @@ $adminName = htmlspecialchars(
                     Welcome, <?php echo $adminName; ?>
                 </span>
 
-                <a href="/logout.php">
+                <a href="logout.php">
                     Logout
                 </a>
 
@@ -68,6 +71,7 @@ $adminName = htmlspecialchars(
 
         </header>
 
+        <!-- DASHBOARD CONTENT -->
         <section class="dashboard-content">
 
             <h2>Welcome to the Dashboard</h2>
