@@ -11,29 +11,17 @@
 require_once __DIR__ . '/../includes/auth.php';
 requireLogin();
 
-date_default_timezone_set('Asia/Manila');
-
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-/*
-|--------------------------------------------------------------------------
-| CSRF TOKEN
-|--------------------------------------------------------------------------
-*/
+date_default_timezone_set('Asia/Manila');
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 $csrfToken = $_SESSION['csrf_token'];
-
-/*
-|--------------------------------------------------------------------------
-| PAGE SETTINGS
-|--------------------------------------------------------------------------
-*/
 
 $pageTitle = 'QR Code Attendance';
 $activePage = 'attendance';
@@ -47,10 +35,7 @@ $massTimes = [
 
 $today = date('Y-m-d');
 
-$processUrl = rtrim(
-    dirname($_SERVER['SCRIPT_NAME']),
-    '/'
-) . '/process_qr.php';
+$processUrl = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/process_qr.php';
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/sidebar.php';
@@ -77,6 +62,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 .attendance-header p {
     color: #777;
     margin: 0;
+    line-height: 1.6;
 }
 
 .attendance-layout {
@@ -173,6 +159,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 }
 
 #reader video {
+    width: 100% !important;
     border-radius: 12px;
 }
 
@@ -321,12 +308,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
     font-size: 14px;
 }
 
-.instructions-list {
-    padding-left: 22px;
-    line-height: 1.9;
-    color: #555;
-}
-
+.instructions-list,
 .schedule-list {
     padding-left: 22px;
     line-height: 1.9;
@@ -393,8 +375,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <div class="attendance-layout">
 
-        <!-- LEFT: ATTENDANCE SCANNER -->
-
         <div class="attendance-card">
 
             <h3>Attendance Scanner</h3>
@@ -426,8 +406,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             </div>
 
-            <!-- TABS -->
-
             <div class="tab-buttons">
 
                 <button
@@ -447,8 +425,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </button>
 
             </div>
-
-            <!-- QR SCANNER PANEL -->
 
             <div id="scannerPanel">
 
@@ -479,8 +455,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             </div>
 
-            <!-- MANUAL SEARCH PANEL -->
-
             <div class="manual-search" id="manualPanel">
 
                 <label for="memberSearch">Search Member</label>
@@ -501,8 +475,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             </div>
 
-            <!-- RESPONSE MESSAGE -->
-
             <div
                 id="scanResult"
                 class="scan-result"
@@ -511,8 +483,6 @@ require_once __DIR__ . '/../includes/sidebar.php';
             ></div>
 
         </div>
-
-        <!-- RIGHT: INSTRUCTIONS -->
 
         <div class="attendance-card">
 
@@ -547,25 +517,14 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 </div>
 
-<!-- QR SCANNER LIBRARY -->
-
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <script>
-/*
-|--------------------------------------------------------------------------
-| SERVER CONFIGURATION
-|--------------------------------------------------------------------------
-*/
+'use strict';
 
 const PROCESS_URL = <?= json_encode($processUrl) ?>;
 const CSRF_TOKEN = <?= json_encode($csrfToken) ?>;
-
-/*
-|--------------------------------------------------------------------------
-| GLOBAL VARIABLES
-|--------------------------------------------------------------------------
-*/
+const TODAY = <?= json_encode($today) ?>;
 
 let html5QrCode = null;
 let scannerRunning = false;
@@ -582,16 +541,8 @@ const stopButton = document.getElementById('stopScanner');
 const memberResults = document.getElementById('memberResults');
 const memberSearch = document.getElementById('memberSearch');
 
-/*
-|--------------------------------------------------------------------------
-| ESCAPE HTML
-|--------------------------------------------------------------------------
-*/
-
 function escapeHtml(value) {
-
     return String(value ?? '').replace(/[&<>"']/g, function(char) {
-
         return {
             '&': '&amp;',
             '<': '&lt;',
@@ -599,44 +550,22 @@ function escapeHtml(value) {
             '"': '&quot;',
             "'": '&#039;'
         }[char];
-
     });
 }
 
-/*
-|--------------------------------------------------------------------------
-| DISPLAY MESSAGE
-|--------------------------------------------------------------------------
-*/
-
 function showResult(message, type = 'info') {
-
     scanResult.className = 'scan-result ' + type;
     scanResult.textContent = message;
 }
 
-/*
-|--------------------------------------------------------------------------
-| GET ATTENDANCE DETAILS
-|--------------------------------------------------------------------------
-*/
-
 function getAttendanceDetails() {
-
     return {
         mass_date: document.getElementById('mass_date').value,
         mass_time: document.getElementById('mass_time').value
     };
 }
 
-/*
-|--------------------------------------------------------------------------
-| VALIDATE ATTENDANCE DETAILS
-|--------------------------------------------------------------------------
-*/
-
 function validateAttendanceDetails() {
-
     const details = getAttendanceDetails();
 
     if (!details.mass_date) {
@@ -649,7 +578,7 @@ function validateAttendanceDetails() {
         return false;
     }
 
-    if (details.mass_date > <?= json_encode($today) ?>) {
+    if (details.mass_date > TODAY) {
         showResult('You cannot record attendance for a future date.', 'error');
         return false;
     }
@@ -657,64 +586,53 @@ function validateAttendanceDetails() {
     return true;
 }
 
-/*
-|--------------------------------------------------------------------------
-| SEND REQUEST TO PHP
-|--------------------------------------------------------------------------
-*/
-
 async function sendRequest(formData) {
+    let response;
 
-    const response = await fetch(PROCESS_URL, {
-        method: 'POST',
-        body: formData,
-        credentials: 'same-origin',
-        headers: {
-            'Accept': 'application/json'
-        }
-    });
+    try {
+        response = await fetch(PROCESS_URL, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+    } catch (error) {
+        console.error('Network error:', error);
+        throw new Error('Unable to connect to the attendance server. Check your internet connection.');
+    }
 
     const responseText = await response.text();
+
+    console.log('Attendance endpoint:', PROCESS_URL);
+    console.log('HTTP status:', response.status);
+    console.log('Server response:', responseText);
 
     let result;
 
     try {
-
         result = JSON.parse(responseText);
-
     } catch (error) {
-
-        console.error(
-            'Invalid server response:',
-            responseText
-        );
-
         if (response.redirected) {
-            throw new Error(
-                'Your session may have expired. Log in again and refresh this page.'
-            );
+            throw new Error('Your session may have expired. Log in again and refresh this page.');
         }
 
         throw new Error(
-            'The server returned an invalid response. Check the Render PHP logs.'
+            'The server returned an invalid response (HTTP ' +
+            response.status +
+            '). Check the Render logs.'
         );
     }
 
     if (!response.ok && !result.message) {
-        throw new Error('The server could not process your request.');
+        throw new Error('Server error: HTTP ' + response.status);
     }
 
     return result;
 }
 
-/*
-|--------------------------------------------------------------------------
-| START QR SCANNER
-|--------------------------------------------------------------------------
-*/
-
 async function startScanner() {
-
     if (scannerRunning || processingScan) {
         return;
     }
@@ -724,23 +642,14 @@ async function startScanner() {
     }
 
     if (typeof Html5Qrcode === 'undefined') {
-
-        showResult(
-            'QR scanner library could not load. Check your internet connection.',
-            'error'
-        );
-
+        showResult('QR scanner library could not load. Check your internet connection.', 'error');
         return;
     }
 
     try {
-
         startButton.disabled = true;
 
-        showResult(
-            'Starting camera. Please allow camera access.',
-            'info'
-        );
+        showResult('Starting camera. Please allow camera access.', 'info');
 
         if (!html5QrCode) {
             html5QrCode = new Html5Qrcode('reader');
@@ -756,27 +665,19 @@ async function startScanner() {
                 }
             },
             recordQrAttendance,
-            function() {
-                // Ignore temporary QR decoding errors.
-            }
+            function() {}
         );
 
         scannerRunning = true;
-
         startButton.disabled = true;
         stopButton.disabled = false;
 
-        showResult(
-            'Scanner started. Point the camera at a member QR code.',
-            'info'
-        );
+        showResult('Scanner started. Point the camera at a member QR code.', 'info');
 
     } catch (error) {
-
         console.error('Scanner start error:', error);
 
         scannerRunning = false;
-
         startButton.disabled = false;
         stopButton.disabled = true;
 
@@ -787,48 +688,27 @@ async function startScanner() {
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| STOP QR SCANNER
-|--------------------------------------------------------------------------
-*/
-
 async function stopScanner() {
-
     if (!html5QrCode || !scannerRunning) {
         return;
     }
 
     try {
-
         await html5QrCode.stop();
 
         scannerRunning = false;
-
         startButton.disabled = false;
         stopButton.disabled = true;
 
         showResult('Scanner stopped.', 'info');
 
     } catch (error) {
-
         console.error('Scanner stop error:', error);
-
-        showResult(
-            'Unable to stop the scanner properly.',
-            'error'
-        );
+        showResult('Unable to stop the scanner properly.', 'error');
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| RECORD QR ATTENDANCE
-|--------------------------------------------------------------------------
-*/
-
 async function recordQrAttendance(decodedText) {
-
     if (processingScan) {
         return;
     }
@@ -836,21 +716,13 @@ async function recordQrAttendance(decodedText) {
     const token = String(decodedText).trim();
 
     if (!/^[a-f0-9]{64}$/i.test(token)) {
-
-        showResult(
-            'Invalid QR code. Please scan an official member QR card.',
-            'error'
-        );
-
+        showResult('Invalid QR code. Please scan an official member QR card.', 'error');
         return;
     }
 
     const now = Date.now();
 
-    if (
-        token === lastScannedToken &&
-        now - lastScanTime < 4000
-    ) {
+    if (token === lastScannedToken && now - lastScanTime < 4000) {
         return;
     }
 
@@ -859,19 +731,13 @@ async function recordQrAttendance(decodedText) {
     }
 
     processingScan = true;
-
     lastScannedToken = token;
     lastScanTime = now;
 
-    showResult(
-        'QR recognized. Recording attendance...',
-        'info'
-    );
+    showResult('QR recognized. Recording attendance...', 'info');
 
     try {
-
         const details = getAttendanceDetails();
-
         const formData = new FormData();
 
         formData.append('action', 'record_qr');
@@ -883,7 +749,6 @@ async function recordQrAttendance(decodedText) {
         const result = await sendRequest(formData);
 
         if (result.already_recorded) {
-
             showResult(
                 'ATTENDANCE ALREADY RECORDED\n' +
                 'Member: ' + (result.member_name || '') + '\n' +
@@ -892,17 +757,11 @@ async function recordQrAttendance(decodedText) {
                 'Check-in: ' + (result.check_in_time || ''),
                 'warning'
             );
-
             return;
         }
 
         if (!result.success) {
-
-            showResult(
-                result.message || 'Unable to record attendance.',
-                'error'
-            );
-
+            showResult(result.message || 'Unable to record attendance.', 'error');
             return;
         }
 
@@ -918,32 +777,18 @@ async function recordQrAttendance(decodedText) {
         );
 
     } catch (error) {
-
         console.error('QR attendance error:', error);
-
-        showResult(
-            error.message || 'Unable to contact the attendance server.',
-            'error'
-        );
+        showResult(error.message || 'Unable to contact the attendance server.', 'error');
 
     } finally {
-
         processingScan = false;
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| SEARCH MEMBERS
-|--------------------------------------------------------------------------
-*/
-
 async function searchMembers(search) {
-
     const requestNumber = ++searchRequestNumber;
 
     const formData = new FormData();
-
     formData.append('action', 'search');
     formData.append('csrf_token', CSRF_TOKEN);
     formData.append('search', search);
@@ -952,28 +797,23 @@ async function searchMembers(search) {
         '<div class="empty-message">Searching members...</div>';
 
     try {
-
         const result = await sendRequest(formData);
 
-        // Ignore older responses if the user has typed a newer search.
         if (requestNumber !== searchRequestNumber) {
             return;
         }
 
         if (!result.success) {
-
             memberResults.innerHTML =
                 '<div class="empty-message">' +
                 escapeHtml(result.message || 'Unable to search members.') +
                 '</div>';
-
             return;
         }
 
         renderMembers(result.members || []);
 
     } catch (error) {
-
         console.error('Member search error:', error);
 
         if (requestNumber !== searchRequestNumber) {
@@ -987,24 +827,14 @@ async function searchMembers(search) {
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| DISPLAY MEMBER RESULTS
-|--------------------------------------------------------------------------
-*/
-
 function renderMembers(members) {
-
     if (!Array.isArray(members) || members.length === 0) {
-
         memberResults.innerHTML =
             '<div class="empty-message">No active members found.</div>';
-
         return;
     }
 
     memberResults.innerHTML = members.map(function(member) {
-
         const memberId = Number(member.id);
 
         if (!Number.isInteger(memberId) || memberId <= 0) {
@@ -1013,7 +843,6 @@ function renderMembers(members) {
 
         return `
             <div class="member-item">
-
                 <strong>${escapeHtml(member.full_name)}</strong>
 
                 <small>
@@ -1021,7 +850,6 @@ function renderMembers(members) {
                 </small>
 
                 <div class="member-item-actions">
-
                     <button
                         type="button"
                         class="btn btn-success"
@@ -1039,59 +867,38 @@ function renderMembers(members) {
                     >
                         Excused
                     </button>
-
                 </div>
-
             </div>
         `;
-
     }).join('');
-
 }
 
-/*
-|--------------------------------------------------------------------------
-| MEMBER RESULT BUTTON EVENTS
-|--------------------------------------------------------------------------
-*/
-
 memberResults.addEventListener('click', function(event) {
-
     const button = event.target.closest('button[data-member-id]');
 
     if (!button) {
         return;
     }
 
-    const memberId = Number(button.dataset.memberId);
-    const status = button.dataset.status;
-
-    recordManualAttendance(memberId, status, button);
+    recordManualAttendance(
+        Number(button.dataset.memberId),
+        button.dataset.status,
+        button
+    );
 });
 
-/*
-|--------------------------------------------------------------------------
-| MANUAL ATTENDANCE
-|--------------------------------------------------------------------------
-*/
-
 async function recordManualAttendance(memberId, status, button) {
-
     if (manualRequestRunning) {
         return;
     }
 
     if (!Number.isInteger(memberId) || memberId <= 0) {
-
         showResult('Invalid member ID.', 'error');
-
         return;
     }
 
     if (!['Present', 'Excused'].includes(status)) {
-
         showResult('Invalid attendance status.', 'error');
-
         return;
     }
 
@@ -1102,14 +909,11 @@ async function recordManualAttendance(memberId, status, button) {
     manualRequestRunning = true;
 
     const originalText = button.textContent;
-
     button.disabled = true;
     button.textContent = 'Saving...';
 
     try {
-
         const details = getAttendanceDetails();
-
         const formData = new FormData();
 
         formData.append('action', 'record_manual');
@@ -1124,22 +928,15 @@ async function recordManualAttendance(memberId, status, button) {
         const result = await sendRequest(formData);
 
         if (result.already_recorded) {
-
             showResult(
                 'Attendance has already been recorded for this member and Mass schedule.',
                 'warning'
             );
-
             return;
         }
 
         if (!result.success) {
-
-            showResult(
-                result.message || 'Unable to record attendance.',
-                'error'
-            );
-
+            showResult(result.message || 'Unable to record attendance.', 'error');
             return;
         }
 
@@ -1156,37 +953,22 @@ async function recordManualAttendance(memberId, status, button) {
         );
 
     } catch (error) {
-
         console.error('Manual attendance error:', error);
-
-        showResult(
-            error.message || 'Unable to record manual attendance.',
-            'error'
-        );
+        showResult(error.message || 'Unable to record manual attendance.', 'error');
 
     } finally {
-
         manualRequestRunning = false;
-
         button.disabled = false;
         button.textContent = originalText;
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| SEARCH INPUT EVENT
-|--------------------------------------------------------------------------
-*/
-
 memberSearch.addEventListener('input', function() {
-
     clearTimeout(searchTimer);
 
     const search = this.value.trim();
 
     if (search.length < 2) {
-
         searchRequestNumber++;
 
         memberResults.innerHTML =
@@ -1198,74 +980,39 @@ memberSearch.addEventListener('input', function() {
     searchTimer = setTimeout(function() {
         searchMembers(search);
     }, 400);
-
 });
 
-/*
-|--------------------------------------------------------------------------
-| TAB SWITCHING
-|--------------------------------------------------------------------------
-*/
-
 document.getElementById('qrTab').addEventListener('click', async function() {
-
     await stopScanner();
 
     this.classList.add('active');
-
     document.getElementById('manualTab').classList.remove('active');
 
     document.getElementById('scannerPanel').style.display = 'block';
     document.getElementById('manualPanel').style.display = 'none';
-
 });
 
 document.getElementById('manualTab').addEventListener('click', async function() {
-
     await stopScanner();
 
     this.classList.add('active');
-
     document.getElementById('qrTab').classList.remove('active');
 
     document.getElementById('scannerPanel').style.display = 'none';
     document.getElementById('manualPanel').style.display = 'block';
-
 });
-
-/*
-|--------------------------------------------------------------------------
-| BUTTON EVENTS
-|--------------------------------------------------------------------------
-*/
 
 startButton.addEventListener('click', startScanner);
 stopButton.addEventListener('click', stopScanner);
 
-/*
-|--------------------------------------------------------------------------
-| INITIALIZE
-|--------------------------------------------------------------------------
-*/
-
 stopButton.disabled = true;
 
-/*
-|--------------------------------------------------------------------------
-| STOP CAMERA WHEN LEAVING PAGE
-|--------------------------------------------------------------------------
-*/
-
 window.addEventListener('beforeunload', function() {
-
     if (scannerRunning && html5QrCode) {
-
         html5QrCode.stop().catch(function(error) {
             console.error('Camera cleanup error:', error);
         });
-
     }
-
 });
 </script>
 

@@ -58,7 +58,20 @@ function sendAttendanceResponse(
 
 /*
 |--------------------------------------------------------------------------
-| REQUEST VALIDATION
+| ERROR LOGGING
+|--------------------------------------------------------------------------
+*/
+
+function attendanceLogError(string $label, Throwable $error): void
+{
+    error_log(
+        '[AS-SYSTEM] ' . $label . ': ' . $error->getMessage()
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| REQUEST METHOD
 |--------------------------------------------------------------------------
 */
 
@@ -96,12 +109,12 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| DATABASE VALIDATION
+| DATABASE CONNECTION
 |--------------------------------------------------------------------------
 */
 
 if (!isset($pdo) || !($pdo instanceof PDO)) {
-    error_log('Attendance Error: PDO connection unavailable.');
+    error_log('[AS-SYSTEM] Attendance: PDO connection unavailable.');
 
     sendAttendanceResponse(
         false,
@@ -115,7 +128,7 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
-    error_log('Attendance PDO Setup Error: ' . $e->getMessage());
+    attendanceLogError('PDO configuration error', $e);
 
     sendAttendanceResponse(
         false,
@@ -151,7 +164,7 @@ $allowedAttendanceStatuses = [
 
 /*
 |--------------------------------------------------------------------------
-| GET ACTION
+| REQUEST ACTION
 |--------------------------------------------------------------------------
 */
 
@@ -176,7 +189,6 @@ if ($action === 'search') {
 
     $search = trim((string)($_POST['search'] ?? ''));
 
-    // Use mb_strlen when available; otherwise use strlen.
     $searchLength = function_exists('mb_strlen')
         ? mb_strlen($search, 'UTF-8')
         : strlen($search);
@@ -185,6 +197,13 @@ if ($action === 'search') {
         sendAttendanceResponse(
             false,
             'Please enter at least two characters.'
+        );
+    }
+
+    if ($searchLength > 100) {
+        sendAttendanceResponse(
+            false,
+            'Search text is too long.'
         );
     }
 
@@ -224,11 +243,11 @@ if ($action === 'search') {
         );
 
     } catch (Throwable $e) {
-        error_log('Member Search Error: ' . $e->getMessage());
+        attendanceLogError('Member search error', $e);
 
         sendAttendanceResponse(
             false,
-            'Unable to search members. Check the members table columns and Render logs.',
+            'Unable to search members. Check the members table structure and server logs.',
             [],
             500
         );
@@ -293,7 +312,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | QR CODE ATTENDANCE
+    | QR ATTENDANCE
     |--------------------------------------------------------------------------
     */
 
@@ -366,7 +385,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | CHECK MEMBER EXISTENCE
+    | MEMBER EXISTENCE
     |--------------------------------------------------------------------------
     */
 
@@ -381,7 +400,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | CHECK MEMBER STATUS
+    | MEMBER STATUS
     |--------------------------------------------------------------------------
     */
 
@@ -484,12 +503,51 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | SAVE ATTENDANCE
+    | CHECK RECORDED_BY COLUMN REQUIREMENTS
     |--------------------------------------------------------------------------
     |
-    | This insert assumes recorded_by accepts NULL.
-    | A unique constraint on member_id, mass_date, mass_time
-    | is recommended to prevent duplicate records.
+    | The insert below does not guess an administrator session key.
+    | If recorded_by is nullable or has a database default, PostgreSQL
+    | can handle it. If it is required without a default, the system
+    | returns a clear error instead of silently assigning a false ID.
+    |--------------------------------------------------------------------------
+    */
+
+    $recordedByStmt = $pdo->prepare("
+        SELECT
+            is_nullable,
+            column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'mass_attendance'
+          AND column_name = 'recorded_by'
+        LIMIT 1
+    ");
+
+    $recordedByStmt->execute();
+
+    $recordedByColumn = $recordedByStmt->fetch();
+
+    if (
+        $recordedByColumn &&
+        $recordedByColumn['is_nullable'] === 'NO' &&
+        $recordedByColumn['column_default'] === null
+    ) {
+        error_log(
+            '[AS-SYSTEM] mass_attendance.recorded_by is NOT NULL and has no default.'
+        );
+
+        sendAttendanceResponse(
+            false,
+            'The attendance table requires recorded_by, but the administrator ID is not configured. Please check the database column and admin session configuration.',
+            [],
+            500
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | INSERT ATTENDANCE
     |--------------------------------------------------------------------------
     */
 
@@ -500,8 +558,7 @@ try {
             mass_time,
             attendance_status,
             check_in_time,
-            attendance_method,
-            recorded_by
+            attendance_method
         )
         VALUES (
             :member_id,
@@ -509,8 +566,7 @@ try {
             :mass_time,
             :attendance_status,
             CURRENT_TIMESTAMP,
-            :attendance_method,
-            NULL
+            :attendance_method
         )
         RETURNING
             id,
@@ -577,15 +633,36 @@ try {
         ]
     );
 
-} catch (Throwable $e) {
+} catch (PDOException $e) {
 
-    error_log(
-        'Attendance Processing Error: ' . $e->getMessage()
-    );
+    attendanceLogError('Attendance database error', $e);
+
+    // PostgreSQL unique constraint violation.
+    if ($e->getCode() === '23505') {
+        sendAttendanceResponse(
+            false,
+            'Attendance has already been recorded for this member and Mass schedule.',
+            [
+                'already_recorded' => true
+            ],
+            409
+        );
+    }
 
     sendAttendanceResponse(
         false,
         'A database error occurred while processing attendance. Check the Render logs.',
+        [],
+        500
+    );
+
+} catch (Throwable $e) {
+
+    attendanceLogError('Attendance processing error', $e);
+
+    sendAttendanceResponse(
+        false,
+        'An unexpected error occurred while processing attendance. Check the Render logs.',
         [],
         500
     );
