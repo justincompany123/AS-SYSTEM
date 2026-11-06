@@ -8,16 +8,22 @@
 |--------------------------------------------------------------------------
 */
 
-// Authentication and session must load first.
 require_once __DIR__ . '/includes/auth.php';
 
-// If already logged in, go to dashboard.
+// Already logged in? Go to dashboard.
 redirectIfLoggedIn();
 
-// Connect to Supabase PostgreSQL.
+// Show loading screen only on the first login-page visit
+// during this PHP session.
+$showInitialLoading = empty($_SESSION['initial_loading_screen_shown']);
+
+if ($showInitialLoading) {
+    $_SESSION['initial_loading_screen_shown'] = true;
+}
+
+// Database connection
 require_once __DIR__ . '/config/database.php';
 
-// Login variables.
 $error = '';
 $username = '';
 
@@ -66,36 +72,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 password_verify($password, $admin['password'])
             ) {
 
-                /*
-                |--------------------------------------------------------------------------
-                | REGENERATE SESSION ID
-                |--------------------------------------------------------------------------
-                */
-
+                // Regenerate session ID after successful login.
                 if (!session_regenerate_id(true)) {
                     throw new RuntimeException(
                         'Unable to regenerate administrator session.'
                     );
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | SAVE ADMINISTRATOR SESSION
-                |--------------------------------------------------------------------------
-                */
-
+                // Save administrator information.
                 $_SESSION['admin_id'] = $admin['id'];
                 $_SESSION['username'] = $admin['username'];
                 $_SESSION['admin_name'] = $admin['full_name'];
                 $_SESSION['admin_role'] = $admin['role'];
                 $_SESSION['admin_email'] = $admin['email'];
 
-                /*
-                |--------------------------------------------------------------------------
-                | SAVE SESSION BEFORE REDIRECT
-                |--------------------------------------------------------------------------
-                */
+                // Tell the dashboard to display the loading screen.
+                $_SESSION['show_loading_screen'] = true;
 
+                // Save session before redirect.
                 session_write_close();
 
                 header('Location: /index.php');
@@ -134,14 +128,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <meta charset="UTF-8">
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>Administrator Login | ALTAR SERVERS</title>
 
-    <link rel="icon"
-          type="image/png"
-          href="/assets/images/favicon.png">
+    <link rel="icon" type="image/png" href="/assets/images/favicon.png">
+
+    <link rel="stylesheet" href="/assets/css/loading-screen.css">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
 
@@ -482,6 +475,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <body>
 
+<?php if ($showInitialLoading): ?>
+    <div id="loading-screen">
+        <h1 class="loading-title">
+            THE KABANKALAN CATHEDRAL MINISTRY OF THE ALTAR SERVERS SYSTEM
+        </h1>
+    </div>
+<?php endif; ?>
+
 <div class="page-wrapper">
 
     <!-- CHURCH BRANDING -->
@@ -614,16 +615,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 const toggleButton = document.getElementById('togglePassword');
 const passwordInput = document.getElementById('password');
 
-toggleButton.addEventListener('click', function () {
+if (toggleButton && passwordInput) {
 
-    const isPassword = passwordInput.type === 'password';
+    toggleButton.addEventListener('click', function () {
 
-    passwordInput.type = isPassword ? 'text' : 'password';
+        const isPassword = passwordInput.type === 'password';
 
-    toggleButton.textContent = isPassword ? 'HIDE' : 'SHOW';
+        passwordInput.type = isPassword ? 'text' : 'password';
 
-});
+        toggleButton.textContent = isPassword ? 'HIDE' : 'SHOW';
+
+    });
+
+}
 </script>
+
+<script src="/assets/js/loading-screen.js"></script>
 
 </body>
 </html>

@@ -1,4 +1,3 @@
-
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -38,9 +37,14 @@
 
     </div><!-- End app-layout -->
 
+
     <!-- MAIN JAVASCRIPT -->
 
     <script src="/assets/js/script.js"></script>
+
+    <!-- LOADING SCREEN JAVASCRIPT -->
+
+    <script src="/assets/js/loading-screen.js"></script>
 
 </body>
 </html>

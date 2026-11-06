@@ -35,6 +35,23 @@ $adminInitial = strtoupper(
 if ($adminInitial === '') {
     $adminInitial = 'A';
 }
+
+/*
+|--------------------------------------------------------------------------
+| LOADING SCREEN SESSION FLAG
+|--------------------------------------------------------------------------
+|
+| This flag is set after a successful login.
+| It is removed after the loading screen is included.
+| Normal navigation will not show the loading screen again.
+|
+*/
+
+$showLoadingScreen = !empty($_SESSION['show_loading_screen']);
+
+if ($showLoadingScreen) {
+    unset($_SESSION['show_loading_screen']);
+}
 ?>
 
 <!DOCTYPE html>
@@ -80,6 +97,13 @@ if ($adminInitial === '') {
         href="/assets/css/style.css"
     >
 
+    <!-- LOADING SCREEN CSS -->
+
+    <link
+        rel="stylesheet"
+        href="/assets/css/loading-screen.css"
+    >
+
     <!-- PRINT CSS -->
 
     <?php if (!empty($usePrintStylesheet)): ?>
@@ -109,6 +133,21 @@ if ($adminInitial === '') {
 </head>
 
 <body>
+
+    <!-- LOADING SCREEN -->
+
+    <?php if ($showLoadingScreen): ?>
+
+        <div id="loading-screen">
+
+            <h1 class="loading-title">
+                THE KABANKALAN CATHEDRAL MINISTRY OF THE ALTAR SERVERS SYSTEM
+            </h1>
+
+        </div>
+
+    <?php endif; ?>
+
 
     <!-- MAIN APPLICATION LAYOUT -->
 
