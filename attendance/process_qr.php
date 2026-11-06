@@ -8,7 +8,6 @@
 |--------------------------------------------------------------------------
 */
 
-// Prevent accidental output before JSON headers.
 if (ob_get_level() === 0) {
     ob_start();
 }
@@ -20,19 +19,13 @@ require_once __DIR__ . '/../config/database.php';
 
 date_default_timezone_set('Asia/Manila');
 
-/*
-|--------------------------------------------------------------------------
-| START SESSION
-|--------------------------------------------------------------------------
-*/
-
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 /*
 |--------------------------------------------------------------------------
-| JSON RESPONSE FUNCTION
+| JSON RESPONSE
 |--------------------------------------------------------------------------
 */
 
@@ -42,8 +35,6 @@ function sendAttendanceResponse(
     array $extra = [],
     int $httpStatus = 200
 ): void {
-
-    // Remove accidental output from included PHP files.
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
@@ -67,7 +58,7 @@ function sendAttendanceResponse(
 
 /*
 |--------------------------------------------------------------------------
-| REQUEST METHOD VALIDATION
+| REQUEST VALIDATION
 |--------------------------------------------------------------------------
 */
 
@@ -82,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 /*
 |--------------------------------------------------------------------------
-| CSRF TOKEN VALIDATION
+| CSRF VALIDATION
 |--------------------------------------------------------------------------
 */
 
@@ -97,7 +88,7 @@ if (
 ) {
     sendAttendanceResponse(
         false,
-        'Your session has expired. Please refresh the page and try again.',
+        'Your session has expired. Refresh the page and try again.',
         [],
         403
     );
@@ -105,32 +96,34 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| DATABASE CONNECTION VALIDATION
+| DATABASE VALIDATION
 |--------------------------------------------------------------------------
-|
-| config/database.php must provide a PDO connection named $pdo.
-|
 */
 
 if (!isset($pdo) || !($pdo instanceof PDO)) {
-    error_log('Attendance Error: PDO database connection unavailable.');
+    error_log('Attendance Error: PDO connection unavailable.');
 
     sendAttendanceResponse(
         false,
-        'Database connection failed. Please contact the administrator.',
+        'Database connection is unavailable.',
         [],
         500
     );
 }
 
-/*
-|--------------------------------------------------------------------------
-| PDO ERROR MODE
-|--------------------------------------------------------------------------
-*/
+try {
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    error_log('Attendance PDO Setup Error: ' . $e->getMessage());
 
-$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-$pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    sendAttendanceResponse(
+        false,
+        'Unable to configure the database connection.',
+        [],
+        500
+    );
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -183,7 +176,12 @@ if ($action === 'search') {
 
     $search = trim((string)($_POST['search'] ?? ''));
 
-    if (mb_strlen($search) < 2) {
+    // Use mb_strlen when available; otherwise use strlen.
+    $searchLength = function_exists('mb_strlen')
+        ? mb_strlen($search, 'UTF-8')
+        : strlen($search);
+
+    if ($searchLength < 2) {
         sendAttendanceResponse(
             false,
             'Please enter at least two characters.'
@@ -191,6 +189,7 @@ if ($action === 'search') {
     }
 
     try {
+        $searchValue = '%' . $search . '%';
 
         $stmt = $pdo->prepare("
             SELECT
@@ -206,8 +205,6 @@ if ($action === 'search') {
             ORDER BY full_name ASC
             LIMIT 20
         ");
-
-        $searchValue = '%' . $search . '%';
 
         $stmt->execute([
             ':search_name' => $searchValue,
@@ -227,12 +224,11 @@ if ($action === 'search') {
         );
 
     } catch (Throwable $e) {
-
         error_log('Member Search Error: ' . $e->getMessage());
 
         sendAttendanceResponse(
             false,
-            'Unable to search members. Please try again.',
+            'Unable to search members. Check the members table columns and Render logs.',
             [],
             500
         );
@@ -305,7 +301,6 @@ try {
 
         $qrToken = trim((string)($_POST['qr_token'] ?? ''));
 
-        // QR tokens must contain exactly 64 hexadecimal characters.
         if (!preg_match('/^[a-f0-9]{64}$/i', $qrToken)) {
             sendAttendanceResponse(
                 false,
@@ -329,7 +324,6 @@ try {
         ]);
 
         $member = $memberStmt->fetch();
-
     }
 
     /*
@@ -377,7 +371,6 @@ try {
     */
 
     if (!$member) {
-
         sendAttendanceResponse(
             false,
             $action === 'record_qr'
@@ -393,7 +386,7 @@ try {
     */
 
     $memberStatus = strtolower(
-        trim((string)$member['status'])
+        trim((string)($member['status'] ?? ''))
     );
 
     if ($memberStatus !== 'active') {
@@ -436,12 +429,68 @@ try {
 
     /*
     |--------------------------------------------------------------------------
+    | CHECK EXISTING ATTENDANCE
+    |--------------------------------------------------------------------------
+    */
+
+    $existingStmt = $pdo->prepare("
+        SELECT
+            id,
+            check_in_time,
+            attendance_status,
+            attendance_method
+        FROM public.mass_attendance
+        WHERE member_id = :member_id
+          AND mass_date = CAST(:mass_date AS DATE)
+          AND mass_time = :mass_time
+        LIMIT 1
+    ");
+
+    $existingStmt->execute([
+        ':member_id' => $member['id'],
+        ':mass_date' => $massDate,
+        ':mass_time' => $massTime
+    ]);
+
+    $existing = $existingStmt->fetch();
+
+    if ($existing) {
+
+        $existingCheckIn = $existing['check_in_time'];
+
+        if ($existingCheckIn !== null) {
+            $existingCheckIn = (new DateTimeImmutable(
+                (string)$existingCheckIn
+            ))
+                ->setTimezone(new DateTimeZone('Asia/Manila'))
+                ->format('h:i:s A');
+        }
+
+        sendAttendanceResponse(
+            false,
+            'Attendance has already been recorded for this member and Mass schedule.',
+            [
+                'member_name' => $member['full_name'],
+                'member_code' => $member['member_code'],
+                'mass_date' => $massDate,
+                'mass_time' => $massTime,
+                'attendance_status' => $existing['attendance_status'],
+                'check_in_time' => $existingCheckIn,
+                'attendance_method' => $existing['attendance_method'],
+                'already_recorded' => true
+            ]
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | SAVE ATTENDANCE
     |--------------------------------------------------------------------------
     |
-    | Requires a UNIQUE constraint on:
-    | member_id, mass_date, mass_time
-    |
+    | This insert assumes recorded_by accepts NULL.
+    | A unique constraint on member_id, mass_date, mass_time
+    | is recommended to prevent duplicate records.
+    |--------------------------------------------------------------------------
     */
 
     $insertStmt = $pdo->prepare("
@@ -456,15 +505,13 @@ try {
         )
         VALUES (
             :member_id,
-            :mass_date,
+            CAST(:mass_date AS DATE),
             :mass_time,
             :attendance_status,
             CURRENT_TIMESTAMP,
             :attendance_method,
             NULL
         )
-        ON CONFLICT (member_id, mass_date, mass_time)
-        DO NOTHING
         RETURNING
             id,
             check_in_time,
@@ -482,64 +529,10 @@ try {
 
     $attendance = $insertStmt->fetch();
 
-    /*
-    |--------------------------------------------------------------------------
-    | CHECK DUPLICATE ATTENDANCE
-    |--------------------------------------------------------------------------
-    */
-
     if (!$attendance) {
-
-        $existingStmt = $pdo->prepare("
-            SELECT
-                id,
-                check_in_time,
-                attendance_status,
-                attendance_method
-            FROM public.mass_attendance
-            WHERE member_id = :member_id
-              AND mass_date = :mass_date
-              AND mass_time = :mass_time
-            LIMIT 1
-        ");
-
-        $existingStmt->execute([
-            ':member_id' => $member['id'],
-            ':mass_date' => $massDate,
-            ':mass_time' => $massTime
-        ]);
-
-        $existing = $existingStmt->fetch();
-
-        if ($existing) {
-
-            $existingCheckIn = $existing['check_in_time'];
-
-            if ($existingCheckIn !== null) {
-                $existingCheckIn = (new DateTimeImmutable($existingCheckIn))
-                    ->setTimezone(new DateTimeZone('Asia/Manila'))
-                    ->format('h:i:s A');
-            }
-
-            sendAttendanceResponse(
-                false,
-                'Attendance has already been recorded for this member and Mass schedule.',
-                [
-                    'member_name' => $member['full_name'],
-                    'member_code' => $member['member_code'],
-                    'mass_date' => $massDate,
-                    'mass_time' => $massTime,
-                    'attendance_status' => $existing['attendance_status'],
-                    'check_in_time' => $existingCheckIn,
-                    'attendance_method' => $existing['attendance_method'],
-                    'already_recorded' => true
-                ]
-            );
-        }
-
         sendAttendanceResponse(
             false,
-            'Attendance could not be saved. Please try again.',
+            'Attendance could not be saved.',
             [],
             500
         );
@@ -554,8 +547,9 @@ try {
     $checkInTime = $attendance['check_in_time'];
 
     if ($checkInTime !== null) {
-
-        $checkInTime = (new DateTimeImmutable($checkInTime))
+        $checkInTime = (new DateTimeImmutable(
+            (string)$checkInTime
+        ))
             ->setTimezone(new DateTimeZone('Asia/Manila'))
             ->format('h:i:s A');
     }
@@ -591,9 +585,8 @@ try {
 
     sendAttendanceResponse(
         false,
-        'A database error occurred while processing attendance. Check the server error logs.',
+        'A database error occurred while processing attendance. Check the Render logs.',
         [],
         500
     );
 }
-```

@@ -3,6 +3,7 @@
 |--------------------------------------------------------------------------
 | ALTAR SERVERS MANAGEMENT SYSTEM
 | QR CODE ATTENDANCE SCANNER
+| SUPABASE POSTGRESQL VERSION
 | St. Francis Xavier Cathedral
 |--------------------------------------------------------------------------
 */
@@ -16,11 +17,26 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+/*
+|--------------------------------------------------------------------------
+| CSRF TOKEN
+|--------------------------------------------------------------------------
+*/
+
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 $csrfToken = $_SESSION['csrf_token'];
+
+/*
+|--------------------------------------------------------------------------
+| PAGE SETTINGS
+|--------------------------------------------------------------------------
+*/
+
+$pageTitle = 'QR Code Attendance';
+$activePage = 'attendance';
 
 $massTimes = [
     '6:00 AM',
@@ -31,7 +47,10 @@ $massTimes = [
 
 $today = date('Y-m-d');
 
-$processUrl = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/process_qr.php';
+$processUrl = rtrim(
+    dirname($_SERVER['SCRIPT_NAME']),
+    '/'
+) . '/process_qr.php';
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/sidebar.php';
@@ -39,8 +58,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 <style>
 .attendance-container {
-    padding: 24px;
     width: 100%;
+    padding: 24px;
+    box-sizing: border-box;
 }
 
 .attendance-header {
@@ -50,7 +70,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
 .attendance-header h2 {
     font-size: 26px;
     font-weight: 700;
-    margin-bottom: 6px;
+    margin: 0 0 6px;
+    color: #17365d;
 }
 
 .attendance-header p {
@@ -60,7 +81,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 .attendance-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.7fr);
+    grid-template-columns: minmax(0, 1.3fr) minmax(280px, .7fr);
     gap: 22px;
     align-items: start;
 }
@@ -69,14 +90,15 @@ require_once __DIR__ . '/../includes/sidebar.php';
     background: #fff;
     border-radius: 14px;
     padding: 22px;
-    box-shadow: 0 3px 14px rgba(0,0,0,.07);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, .07);
     min-width: 0;
 }
 
 .attendance-card h3 {
     font-size: 19px;
     font-weight: 700;
-    margin-bottom: 18px;
+    margin: 0 0 18px;
+    color: #17365d;
 }
 
 .attendance-form {
@@ -91,25 +113,51 @@ require_once __DIR__ . '/../includes/sidebar.php';
     display: block;
     font-weight: 600;
     margin-bottom: 7px;
+    color: #333;
 }
 
 .attendance-form input,
 .attendance-form select,
-.manual-search input,
-.manual-search select {
+.manual-search input {
     width: 100%;
-    padding: 11px 12px;
+    min-width: 0;
+    padding: 12px;
     border: 1px solid #ddd;
     border-radius: 8px;
     outline: none;
     background: #fff;
+    font-size: 14px;
+    box-sizing: border-box;
 }
 
 .attendance-form input:focus,
 .attendance-form select:focus,
-.manual-search input:focus,
-.manual-search select:focus {
+.manual-search input:focus {
     border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .1);
+}
+
+.tab-buttons {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.tab-button {
+    flex: 1;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+    padding: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    color: #333;
+}
+
+.tab-button.active {
+    background: #17365d;
+    color: #fff;
+    border-color: #17365d;
 }
 
 .scanner-box {
@@ -121,6 +169,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
 #reader {
     width: 100%;
     overflow: hidden;
+    border-radius: 12px;
+}
+
+#reader video {
     border-radius: 12px;
 }
 
@@ -138,6 +190,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
     font-weight: 600;
     cursor: pointer;
     transition: .2s;
+    font-size: 14px;
 }
 
 .btn:disabled {
@@ -159,6 +212,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
     color: #fff;
 }
 
+.btn-success:hover:not(:disabled) {
+    background: #146c43;
+}
+
 .btn-secondary {
     background: #6c757d;
     color: #fff;
@@ -169,12 +226,18 @@ require_once __DIR__ . '/../includes/sidebar.php';
     color: #212529;
 }
 
+.btn-warning:hover:not(:disabled) {
+    background: #e09b35;
+}
+
 .scan-result {
+    display: none;
     margin-top: 18px;
     padding: 14px;
     border-radius: 9px;
-    display: none;
     overflow-wrap: anywhere;
+    white-space: pre-line;
+    line-height: 1.6;
 }
 
 .scan-result.success {
@@ -198,26 +261,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
     color: #084298;
 }
 
-.tab-buttons {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 20px;
-}
-
-.tab-button {
-    flex: 1;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    background: #fff;
-    padding: 10px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.tab-button.active {
-    background: #17365d;
-    color: #fff;
-    border-color: #17365d;
+.scan-result.warning {
+    display: block;
+    background: #fff3cd;
+    border: 1px solid #ffecb5;
+    color: #664d03;
 }
 
 .manual-search {
@@ -236,13 +284,16 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 .member-item {
     border: 1px solid #e5e7eb;
-    padding: 14px;
+    padding: 15px;
     border-radius: 10px;
+    background: #fff;
 }
 
 .member-item strong {
     display: block;
-    margin-bottom: 4px;
+    margin-bottom: 5px;
+    color: #17365d;
+    font-size: 15px;
 }
 
 .member-item small {
@@ -265,6 +316,27 @@ require_once __DIR__ . '/../includes/sidebar.php';
     color: #777;
     text-align: center;
     padding: 18px;
+    border: 1px dashed #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.instructions-list {
+    padding-left: 22px;
+    line-height: 1.9;
+    color: #555;
+}
+
+.schedule-list {
+    padding-left: 22px;
+    line-height: 1.9;
+    color: #555;
+}
+
+.attendance-note {
+    color: #777;
+    font-size: 13px;
+    line-height: 1.6;
 }
 
 @media (max-width: 900px) {
@@ -297,6 +369,18 @@ require_once __DIR__ . '/../includes/sidebar.php';
     .scanner-actions .btn {
         width: 100%;
     }
+
+    .member-item-actions {
+        flex-direction: column;
+    }
+
+    .member-item-actions button {
+        width: 100%;
+    }
+
+    .tab-button {
+        font-size: 13px;
+    }
 }
 </style>
 
@@ -304,10 +388,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <div class="attendance-header">
         <h2>QR Code Attendance Scanner</h2>
-        <p>Scan an altar server's QR code to record Mass attendance.</p>
+        <p>Scan an altar server's QR code or search for a member manually to record Mass attendance.</p>
     </div>
 
     <div class="attendance-layout">
+
+        <!-- LEFT: ATTENDANCE SCANNER -->
 
         <div class="attendance-card">
 
@@ -317,6 +403,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <div>
                     <label for="mass_date">Mass Date</label>
+
                     <input
                         type="date"
                         id="mass_date"
@@ -327,6 +414,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <div>
                     <label for="mass_time">Mass Schedule</label>
+
                     <select id="mass_time">
                         <?php foreach ($massTimes as $time): ?>
                             <option value="<?= htmlspecialchars($time, ENT_QUOTES, 'UTF-8') ?>">
@@ -338,15 +426,29 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             </div>
 
+            <!-- TABS -->
+
             <div class="tab-buttons">
-                <button type="button" class="tab-button active" id="qrTab">
+
+                <button
+                    type="button"
+                    class="tab-button active"
+                    id="qrTab"
+                >
                     QR Scanner
                 </button>
 
-                <button type="button" class="tab-button" id="manualTab">
+                <button
+                    type="button"
+                    class="tab-button"
+                    id="manualTab"
+                >
                     Manual Search
                 </button>
+
             </div>
+
+            <!-- QR SCANNER PANEL -->
 
             <div id="scannerPanel">
 
@@ -355,16 +457,29 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </div>
 
                 <div class="scanner-actions">
-                    <button type="button" class="btn btn-primary" id="startScanner">
+
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        id="startScanner"
+                    >
                         Start Scanner
                     </button>
 
-                    <button type="button" class="btn btn-secondary" id="stopScanner" disabled>
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        id="stopScanner"
+                        disabled
+                    >
                         Stop Scanner
                     </button>
+
                 </div>
 
             </div>
+
+            <!-- MANUAL SEARCH PANEL -->
 
             <div class="manual-search" id="manualPanel">
 
@@ -375,6 +490,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     id="memberSearch"
                     placeholder="Enter member name or member code..."
                     autocomplete="off"
+                    maxlength="100"
                 >
 
                 <div id="memberResults" class="member-results">
@@ -385,19 +501,28 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             </div>
 
-            <div id="scanResult" class="scan-result"></div>
+            <!-- RESPONSE MESSAGE -->
+
+            <div
+                id="scanResult"
+                class="scan-result"
+                role="status"
+                aria-live="polite"
+            ></div>
 
         </div>
+
+        <!-- RIGHT: INSTRUCTIONS -->
 
         <div class="attendance-card">
 
             <h3>Attendance Instructions</h3>
 
-            <ol>
+            <ol class="instructions-list">
                 <li>Select the correct Mass date.</li>
                 <li>Select the correct Mass schedule.</li>
-                <li>Click Start Scanner.</li>
-                <li>Place the member's QR code in front of the camera.</li>
+                <li>Click Start Scanner or choose Manual Search.</li>
+                <li>Scan the member's QR code or search for their name.</li>
                 <li>Wait for the attendance confirmation.</li>
             </ol>
 
@@ -405,15 +530,15 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             <h3>Available Mass Schedules</h3>
 
-            <ul>
+            <ul class="schedule-list">
                 <?php foreach ($massTimes as $time): ?>
                     <li><?= htmlspecialchars($time, ENT_QUOTES, 'UTF-8') ?></li>
                 <?php endforeach; ?>
             </ul>
 
-            <p style="color:#777; font-size:13px;">
-                Each member can only have one attendance record for the same
-                date and Mass schedule.
+            <p class="attendance-note">
+                Each member should have only one attendance record for
+                the same date and Mass schedule.
             </p>
 
         </div>
@@ -422,26 +547,51 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 </div>
 
+<!-- QR SCANNER LIBRARY -->
+
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <script>
+/*
+|--------------------------------------------------------------------------
+| SERVER CONFIGURATION
+|--------------------------------------------------------------------------
+*/
+
 const PROCESS_URL = <?= json_encode($processUrl) ?>;
 const CSRF_TOKEN = <?= json_encode($csrfToken) ?>;
+
+/*
+|--------------------------------------------------------------------------
+| GLOBAL VARIABLES
+|--------------------------------------------------------------------------
+*/
 
 let html5QrCode = null;
 let scannerRunning = false;
 let processingScan = false;
+let manualRequestRunning = false;
+let searchTimer = null;
+let searchRequestNumber = 0;
 let lastScannedToken = '';
 let lastScanTime = 0;
-let searchTimer = null;
 
-const reader = document.getElementById('reader');
 const scanResult = document.getElementById('scanResult');
 const startButton = document.getElementById('startScanner');
 const stopButton = document.getElementById('stopScanner');
+const memberResults = document.getElementById('memberResults');
+const memberSearch = document.getElementById('memberSearch');
+
+/*
+|--------------------------------------------------------------------------
+| ESCAPE HTML
+|--------------------------------------------------------------------------
+*/
 
 function escapeHtml(value) {
+
     return String(value ?? '').replace(/[&<>"']/g, function(char) {
+
         return {
             '&': '&amp;',
             '<': '&lt;',
@@ -449,22 +599,72 @@ function escapeHtml(value) {
             '"': '&quot;',
             "'": '&#039;'
         }[char];
+
     });
 }
 
+/*
+|--------------------------------------------------------------------------
+| DISPLAY MESSAGE
+|--------------------------------------------------------------------------
+*/
+
 function showResult(message, type = 'info') {
+
     scanResult.className = 'scan-result ' + type;
     scanResult.textContent = message;
 }
 
+/*
+|--------------------------------------------------------------------------
+| GET ATTENDANCE DETAILS
+|--------------------------------------------------------------------------
+*/
+
 function getAttendanceDetails() {
+
     return {
         mass_date: document.getElementById('mass_date').value,
         mass_time: document.getElementById('mass_time').value
     };
 }
 
+/*
+|--------------------------------------------------------------------------
+| VALIDATE ATTENDANCE DETAILS
+|--------------------------------------------------------------------------
+*/
+
+function validateAttendanceDetails() {
+
+    const details = getAttendanceDetails();
+
+    if (!details.mass_date) {
+        showResult('Please select a Mass date.', 'error');
+        return false;
+    }
+
+    if (!details.mass_time) {
+        showResult('Please select a Mass schedule.', 'error');
+        return false;
+    }
+
+    if (details.mass_date > <?= json_encode($today) ?>) {
+        showResult('You cannot record attendance for a future date.', 'error');
+        return false;
+    }
+
+    return true;
+}
+
+/*
+|--------------------------------------------------------------------------
+| SEND REQUEST TO PHP
+|--------------------------------------------------------------------------
+*/
+
 async function sendRequest(formData) {
+
     const response = await fetch(PROCESS_URL, {
         method: 'POST',
         body: formData,
@@ -479,96 +679,72 @@ async function sendRequest(formData) {
     let result;
 
     try {
+
         result = JSON.parse(responseText);
+
     } catch (error) {
-        console.error('Server returned a non-JSON response:', responseText);
+
+        console.error(
+            'Invalid server response:',
+            responseText
+        );
+
+        if (response.redirected) {
+            throw new Error(
+                'Your session may have expired. Log in again and refresh this page.'
+            );
+        }
+
         throw new Error(
-            'The server returned an invalid response. Check your PHP error logs.'
+            'The server returned an invalid response. Check the Render PHP logs.'
         );
     }
 
     if (!response.ok && !result.message) {
-        throw new Error('The server could not process the request.');
+        throw new Error('The server could not process your request.');
     }
 
     return result;
 }
 
-async function recordQrAttendance(decodedText) {
-
-    const token = String(decodedText).trim();
-
-    if (!/^[a-f0-9]{64}$/i.test(token)) {
-        showResult('Invalid QR code. This is not a valid member QR token.', 'error');
-        return;
-    }
-
-    const now = Date.now();
-
-    if (
-        token === lastScannedToken &&
-        now - lastScanTime < 3000
-    ) {
-        return;
-    }
-
-    if (processingScan) {
-        return;
-    }
-
-    processingScan = true;
-    lastScannedToken = token;
-    lastScanTime = now;
-
-    showResult('Processing QR code attendance...', 'info');
-
-    try {
-        const details = getAttendanceDetails();
-
-        const formData = new FormData();
-
-        formData.append('action', 'record_qr');
-        formData.append('csrf_token', CSRF_TOKEN);
-        formData.append('qr_token', token);
-        formData.append('mass_date', details.mass_date);
-        formData.append('mass_time', details.mass_time);
-
-        const result = await sendRequest(formData);
-
-        if (result.success) {
-            showResult(
-                'Attendance recorded successfully!\n' +
-                'Member: ' + result.member_name + '\n' +
-                'Date: ' + result.mass_date + '\n' +
-                'Mass: ' + result.mass_time + '\n' +
-                'Status: ' + result.attendance_status + '\n' +
-                'Check-in: ' + result.check_in_time,
-                'success'
-            );
-        } else {
-            showResult(result.message || 'Unable to record attendance.', 'error');
-        }
-
-    } catch (error) {
-        console.error(error);
-        showResult(error.message || 'An unexpected error occurred.', 'error');
-    } finally {
-        processingScan = false;
-    }
-}
+/*
+|--------------------------------------------------------------------------
+| START QR SCANNER
+|--------------------------------------------------------------------------
+*/
 
 async function startScanner() {
 
-    if (scannerRunning) {
+    if (scannerRunning || processingScan) {
+        return;
+    }
+
+    if (!validateAttendanceDetails()) {
+        return;
+    }
+
+    if (typeof Html5Qrcode === 'undefined') {
+
+        showResult(
+            'QR scanner library could not load. Check your internet connection.',
+            'error'
+        );
+
         return;
     }
 
     try {
+
+        startButton.disabled = true;
+
+        showResult(
+            'Starting camera. Please allow camera access.',
+            'info'
+        );
+
         if (!html5QrCode) {
             html5QrCode = new Html5Qrcode('reader');
         }
-
-        startButton.disabled = true;
 
         await html5QrCode.start(
             { facingMode: 'environment' },
@@ -581,26 +757,41 @@ async function startScanner() {
             },
             recordQrAttendance,
             function() {
-                // Ignore temporary QR decoding failures.
+                // Ignore temporary QR decoding errors.
             }
         );
 
         scannerRunning = true;
+
         startButton.disabled = true;
         stopButton.disabled = false;
 
-        showResult('Scanner started. Point the camera at a member QR code.', 'info');
+        showResult(
+            'Scanner started. Point the camera at a member QR code.',
+            'info'
+        );
 
     } catch (error) {
-        console.error(error);
+
+        console.error('Scanner start error:', error);
+
+        scannerRunning = false;
 
         startButton.disabled = false;
+        stopButton.disabled = true;
+
         showResult(
             'Unable to start the scanner. Allow camera permission and use HTTPS.',
             'error'
         );
     }
 }
+
+/*
+|--------------------------------------------------------------------------
+| STOP QR SCANNER
+|--------------------------------------------------------------------------
+*/
 
 async function stopScanner() {
 
@@ -609,7 +800,9 @@ async function stopScanner() {
     }
 
     try {
+
         await html5QrCode.stop();
+
         scannerRunning = false;
 
         startButton.disabled = false;
@@ -618,54 +811,136 @@ async function stopScanner() {
         showResult('Scanner stopped.', 'info');
 
     } catch (error) {
-        console.error(error);
-        showResult('Unable to stop the scanner properly.', 'error');
+
+        console.error('Scanner stop error:', error);
+
+        showResult(
+            'Unable to stop the scanner properly.',
+            'error'
+        );
     }
 }
 
-startButton.addEventListener('click', startScanner);
-stopButton.addEventListener('click', stopScanner);
+/*
+|--------------------------------------------------------------------------
+| RECORD QR ATTENDANCE
+|--------------------------------------------------------------------------
+*/
 
-document.getElementById('qrTab').addEventListener('click', async function() {
+async function recordQrAttendance(decodedText) {
 
-    await stopScanner();
-
-    document.getElementById('qrTab').classList.add('active');
-    document.getElementById('manualTab').classList.remove('active');
-
-    document.getElementById('scannerPanel').style.display = 'block';
-    document.getElementById('manualPanel').style.display = 'none';
-});
-
-document.getElementById('manualTab').addEventListener('click', async function() {
-
-    await stopScanner();
-
-    document.getElementById('manualTab').classList.add('active');
-    document.getElementById('qrTab').classList.remove('active');
-
-    document.getElementById('scannerPanel').style.display = 'none';
-    document.getElementById('manualPanel').style.display = 'block';
-});
-
-document.getElementById('memberSearch').addEventListener('input', function() {
-
-    clearTimeout(searchTimer);
-
-    const search = this.value.trim();
-
-    if (search.length < 2) {
-        document.getElementById('memberResults').innerHTML =
-            '<div class="empty-message">Enter at least two characters.</div>';
+    if (processingScan) {
         return;
     }
 
-    searchTimer = setTimeout(function() {
-        searchMembers(search);
-    }, 350);
-});
+    const token = String(decodedText).trim();
+
+    if (!/^[a-f0-9]{64}$/i.test(token)) {
+
+        showResult(
+            'Invalid QR code. Please scan an official member QR card.',
+            'error'
+        );
+
+        return;
+    }
+
+    const now = Date.now();
+
+    if (
+        token === lastScannedToken &&
+        now - lastScanTime < 4000
+    ) {
+        return;
+    }
+
+    if (!validateAttendanceDetails()) {
+        return;
+    }
+
+    processingScan = true;
+
+    lastScannedToken = token;
+    lastScanTime = now;
+
+    showResult(
+        'QR recognized. Recording attendance...',
+        'info'
+    );
+
+    try {
+
+        const details = getAttendanceDetails();
+
+        const formData = new FormData();
+
+        formData.append('action', 'record_qr');
+        formData.append('csrf_token', CSRF_TOKEN);
+        formData.append('qr_token', token);
+        formData.append('mass_date', details.mass_date);
+        formData.append('mass_time', details.mass_time);
+
+        const result = await sendRequest(formData);
+
+        if (result.already_recorded) {
+
+            showResult(
+                'ATTENDANCE ALREADY RECORDED\n' +
+                'Member: ' + (result.member_name || '') + '\n' +
+                'Date: ' + (result.mass_date || '') + '\n' +
+                'Mass: ' + (result.mass_time || '') + '\n' +
+                'Check-in: ' + (result.check_in_time || ''),
+                'warning'
+            );
+
+            return;
+        }
+
+        if (!result.success) {
+
+            showResult(
+                result.message || 'Unable to record attendance.',
+                'error'
+            );
+
+            return;
+        }
+
+        showResult(
+            'ATTENDANCE RECORDED SUCCESSFULLY\n' +
+            'Member: ' + (result.member_name || '') + '\n' +
+            'Member Code: ' + (result.member_code || '') + '\n' +
+            'Date: ' + (result.mass_date || '') + '\n' +
+            'Mass: ' + (result.mass_time || '') + '\n' +
+            'Status: ' + (result.attendance_status || '') + '\n' +
+            'Check-in: ' + (result.check_in_time || ''),
+            'success'
+        );
+
+    } catch (error) {
+
+        console.error('QR attendance error:', error);
+
+        showResult(
+            error.message || 'Unable to contact the attendance server.',
+            'error'
+        );
+
+    } finally {
+
+        processingScan = false;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| SEARCH MEMBERS
+|--------------------------------------------------------------------------
+*/
 
 async function searchMembers(search) {
+
+    const requestNumber = ++searchRequestNumber;
 
     const formData = new FormData();
 
@@ -673,51 +948,85 @@ async function searchMembers(search) {
     formData.append('csrf_token', CSRF_TOKEN);
     formData.append('search', search);
 
+    memberResults.innerHTML =
+        '<div class="empty-message">Searching members...</div>';
+
     try {
+
         const result = await sendRequest(formData);
 
+        // Ignore older responses if the user has typed a newer search.
+        if (requestNumber !== searchRequestNumber) {
+            return;
+        }
+
         if (!result.success) {
-            document.getElementById('memberResults').innerHTML =
+
+            memberResults.innerHTML =
                 '<div class="empty-message">' +
-                escapeHtml(result.message || 'No members found.') +
+                escapeHtml(result.message || 'Unable to search members.') +
                 '</div>';
+
             return;
         }
 
         renderMembers(result.members || []);
 
     } catch (error) {
-        console.error(error);
 
-        document.getElementById('memberResults').innerHTML =
+        console.error('Member search error:', error);
+
+        if (requestNumber !== searchRequestNumber) {
+            return;
+        }
+
+        memberResults.innerHTML =
             '<div class="empty-message">' +
             escapeHtml(error.message) +
             '</div>';
     }
 }
 
+/*
+|--------------------------------------------------------------------------
+| DISPLAY MEMBER RESULTS
+|--------------------------------------------------------------------------
+*/
+
 function renderMembers(members) {
 
-    const container = document.getElementById('memberResults');
+    if (!Array.isArray(members) || members.length === 0) {
 
-    if (!members.length) {
-        container.innerHTML =
+        memberResults.innerHTML =
             '<div class="empty-message">No active members found.</div>';
+
         return;
     }
 
-    container.innerHTML = members.map(function(member) {
+    memberResults.innerHTML = members.map(function(member) {
+
+        const memberId = Number(member.id);
+
+        if (!Number.isInteger(memberId) || memberId <= 0) {
+            return '';
+        }
 
         return `
             <div class="member-item">
+
                 <strong>${escapeHtml(member.full_name)}</strong>
-                <small>${escapeHtml(member.member_code)}</small>
+
+                <small>
+                    Member Code: ${escapeHtml(member.member_code)}
+                </small>
 
                 <div class="member-item-actions">
+
                     <button
                         type="button"
                         class="btn btn-success"
-                        onclick="recordManualAttendance(${Number(member.id)}, 'Present')"
+                        data-member-id="${memberId}"
+                        data-status="Present"
                     >
                         Present
                     </button>
@@ -725,64 +1034,239 @@ function renderMembers(members) {
                     <button
                         type="button"
                         class="btn btn-warning"
-                        onclick="recordManualAttendance(${Number(member.id)}, 'Excused')"
+                        data-member-id="${memberId}"
+                        data-status="Excused"
                     >
                         Excused
                     </button>
+
                 </div>
+
             </div>
         `;
 
     }).join('');
+
 }
 
-async function recordManualAttendance(memberId, status) {
+/*
+|--------------------------------------------------------------------------
+| MEMBER RESULT BUTTON EVENTS
+|--------------------------------------------------------------------------
+*/
 
-    if (!Number.isInteger(memberId) || memberId <= 0) {
-        showResult('Invalid member ID.', 'error');
+memberResults.addEventListener('click', function(event) {
+
+    const button = event.target.closest('button[data-member-id]');
+
+    if (!button) {
         return;
     }
 
-    const details = getAttendanceDetails();
+    const memberId = Number(button.dataset.memberId);
+    const status = button.dataset.status;
 
-    const formData = new FormData();
+    recordManualAttendance(memberId, status, button);
+});
 
-    formData.append('action', 'record_manual');
-    formData.append('csrf_token', CSRF_TOKEN);
-    formData.append('member_id', memberId);
-    formData.append('attendance_status', status);
-    formData.append('mass_date', details.mass_date);
-    formData.append('mass_time', details.mass_time);
+/*
+|--------------------------------------------------------------------------
+| MANUAL ATTENDANCE
+|--------------------------------------------------------------------------
+*/
+
+async function recordManualAttendance(memberId, status, button) {
+
+    if (manualRequestRunning) {
+        return;
+    }
+
+    if (!Number.isInteger(memberId) || memberId <= 0) {
+
+        showResult('Invalid member ID.', 'error');
+
+        return;
+    }
+
+    if (!['Present', 'Excused'].includes(status)) {
+
+        showResult('Invalid attendance status.', 'error');
+
+        return;
+    }
+
+    if (!validateAttendanceDetails()) {
+        return;
+    }
+
+    manualRequestRunning = true;
+
+    const originalText = button.textContent;
+
+    button.disabled = true;
+    button.textContent = 'Saving...';
 
     try {
+
+        const details = getAttendanceDetails();
+
+        const formData = new FormData();
+
+        formData.append('action', 'record_manual');
+        formData.append('csrf_token', CSRF_TOKEN);
+        formData.append('member_id', memberId);
+        formData.append('attendance_status', status);
+        formData.append('mass_date', details.mass_date);
+        formData.append('mass_time', details.mass_time);
+
         showResult('Saving attendance...', 'info');
 
         const result = await sendRequest(formData);
 
-        if (result.success) {
+        if (result.already_recorded) {
+
             showResult(
-                'Attendance recorded successfully!\n' +
-                'Member: ' + result.member_name + '\n' +
-                'Status: ' + result.attendance_status + '\n' +
-                'Check-in: ' + result.check_in_time,
-                'success'
+                'Attendance has already been recorded for this member and Mass schedule.',
+                'warning'
             );
-        } else {
-            showResult(result.message || 'Unable to record attendance.', 'error');
+
+            return;
         }
 
+        if (!result.success) {
+
+            showResult(
+                result.message || 'Unable to record attendance.',
+                'error'
+            );
+
+            return;
+        }
+
+        showResult(
+            'ATTENDANCE RECORDED SUCCESSFULLY\n' +
+            'Member: ' + (result.member_name || '') + '\n' +
+            'Member Code: ' + (result.member_code || '') + '\n' +
+            'Date: ' + (result.mass_date || '') + '\n' +
+            'Mass: ' + (result.mass_time || '') + '\n' +
+            'Status: ' + (result.attendance_status || '') + '\n' +
+            'Method: ' + (result.attendance_method || 'Manual') + '\n' +
+            'Check-in: ' + (result.check_in_time || ''),
+            'success'
+        );
+
     } catch (error) {
-        console.error(error);
-        showResult(error.message || 'An unexpected error occurred.', 'error');
+
+        console.error('Manual attendance error:', error);
+
+        showResult(
+            error.message || 'Unable to record manual attendance.',
+            'error'
+        );
+
+    } finally {
+
+        manualRequestRunning = false;
+
+        button.disabled = false;
+        button.textContent = originalText;
     }
 }
 
-window.addEventListener('beforeunload', function() {
-    if (scannerRunning && html5QrCode) {
-        html5QrCode.stop().catch(function() {});
+/*
+|--------------------------------------------------------------------------
+| SEARCH INPUT EVENT
+|--------------------------------------------------------------------------
+*/
+
+memberSearch.addEventListener('input', function() {
+
+    clearTimeout(searchTimer);
+
+    const search = this.value.trim();
+
+    if (search.length < 2) {
+
+        searchRequestNumber++;
+
+        memberResults.innerHTML =
+            '<div class="empty-message">Enter at least two characters.</div>';
+
+        return;
     }
+
+    searchTimer = setTimeout(function() {
+        searchMembers(search);
+    }, 400);
+
+});
+
+/*
+|--------------------------------------------------------------------------
+| TAB SWITCHING
+|--------------------------------------------------------------------------
+*/
+
+document.getElementById('qrTab').addEventListener('click', async function() {
+
+    await stopScanner();
+
+    this.classList.add('active');
+
+    document.getElementById('manualTab').classList.remove('active');
+
+    document.getElementById('scannerPanel').style.display = 'block';
+    document.getElementById('manualPanel').style.display = 'none';
+
+});
+
+document.getElementById('manualTab').addEventListener('click', async function() {
+
+    await stopScanner();
+
+    this.classList.add('active');
+
+    document.getElementById('qrTab').classList.remove('active');
+
+    document.getElementById('scannerPanel').style.display = 'none';
+    document.getElementById('manualPanel').style.display = 'block';
+
+});
+
+/*
+|--------------------------------------------------------------------------
+| BUTTON EVENTS
+|--------------------------------------------------------------------------
+*/
+
+startButton.addEventListener('click', startScanner);
+stopButton.addEventListener('click', stopScanner);
+
+/*
+|--------------------------------------------------------------------------
+| INITIALIZE
+|--------------------------------------------------------------------------
+*/
+
+stopButton.disabled = true;
+
+/*
+|--------------------------------------------------------------------------
+| STOP CAMERA WHEN LEAVING PAGE
+|--------------------------------------------------------------------------
+*/
+
+window.addEventListener('beforeunload', function() {
+
+    if (scannerRunning && html5QrCode) {
+
+        html5QrCode.stop().catch(function(error) {
+            console.error('Camera cleanup error:', error);
+        });
+
+    }
+
 });
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
-```

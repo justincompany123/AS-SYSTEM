@@ -2,7 +2,6 @@
 |--------------------------------------------------------------------------
 | ALTAR SERVERS MANAGEMENT SYSTEM
 | QR CODE ATTENDANCE SCANNER
-| Supabase PostgreSQL
 | St. Francis Xavier Cathedral
 |--------------------------------------------------------------------------
 */
@@ -15,7 +14,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /*
     |--------------------------------------------------------------------------
-    | SUPPORT BOTH SCANNER ELEMENT NAMING STYLES
+    | GET PAGE ELEMENTS
     |--------------------------------------------------------------------------
     */
 
@@ -62,13 +61,12 @@ document.addEventListener('DOMContentLoaded', function () {
         !readerElement
     ) {
         console.error('QR scanner elements are missing.');
-
         return;
     }
 
     /*
     |--------------------------------------------------------------------------
-    | CHECK QR SCANNER LIBRARY
+    | CHECK QR LIBRARY
     |--------------------------------------------------------------------------
     */
 
@@ -80,7 +78,6 @@ document.addEventListener('DOMContentLoaded', function () {
         );
 
         startButton.disabled = true;
-
         return;
     }
 
@@ -94,17 +91,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let processUrl = config.processUrl || '';
 
-    /*
-     * If processUrl was not configured in the page,
-     * derive it from this JavaScript file location.
-     */
-
+    // Correct path from assets/js/qr-scanner.js to attendance/process_qr.php.
     if (!processUrl && qrScannerScriptUrl) {
-    processUrl = new URL(
-        '../attendance/process_qr.php',
-        qrScannerScriptUrl
-    ).href;
-}
+        processUrl = new URL(
+            '../../attendance/process_qr.php',
+            qrScannerScriptUrl
+        ).href;
+    }
 
     if (!processUrl) {
 
@@ -114,7 +107,6 @@ document.addEventListener('DOMContentLoaded', function () {
         );
 
         startButton.disabled = true;
-
         return;
     }
 
@@ -156,7 +148,6 @@ document.addEventListener('DOMContentLoaded', function () {
             statusElement.id === 'scanResult'
                 ? 'scan-result ' + type
                 : 'scanner-status ' + type;
-
     }
 
     /*
@@ -177,7 +168,6 @@ document.addEventListener('DOMContentLoaded', function () {
         );
 
         return input ? input.value : '';
-
     }
 
     /*
@@ -193,7 +183,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         return selectedMassTime;
-
     }
 
     /*
@@ -207,12 +196,9 @@ document.addEventListener('DOMContentLoaded', function () {
         selectedMassTime = getSelectedMassTime();
 
         if (massDisplay) {
-
             massDisplay.textContent =
                 dateInput.value + ' — ' + selectedMassTime;
-
         }
-
     }
 
     /*
@@ -224,7 +210,6 @@ document.addEventListener('DOMContentLoaded', function () {
     function setControlsDisabled(disabled) {
 
         startButton.disabled = disabled;
-
         dateInput.disabled = disabled;
 
         if (massTimeSelect) {
@@ -234,7 +219,6 @@ document.addEventListener('DOMContentLoaded', function () {
         massButtons.forEach(function (button) {
             button.disabled = disabled;
         });
-
     }
 
     /*
@@ -272,15 +256,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
             selectedMassTime = selected;
 
+            if (massTimeSelect) {
+                massTimeSelect.value = selected;
+            }
+
             updateSessionDisplay();
 
             showStatus(
                 'Selected Mass: ' + selectedMassTime,
                 'info'
             );
-
         });
-
     });
 
     /*
@@ -305,10 +291,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
             selectedMassTime = this.value;
 
+            massButtons.forEach(function (button) {
+                button.classList.toggle(
+                    'active',
+                    button.dataset.massTime === selectedMassTime
+                );
+            });
+
             updateSessionDisplay();
-
         });
-
     }
 
     /*
@@ -330,7 +321,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         updateSessionDisplay();
-
     });
 
     /*
@@ -411,16 +401,13 @@ document.addEventListener('DOMContentLoaded', function () {
             scannerRunning = false;
 
             setControlsDisabled(false);
-
             stopButton.disabled = true;
 
             showStatus(
                 'Unable to start camera. Allow camera permission and use HTTPS.',
                 'error'
             );
-
         }
-
     }
 
     /*
@@ -442,7 +429,6 @@ document.addEventListener('DOMContentLoaded', function () {
             scannerRunning = false;
 
             setControlsDisabled(false);
-
             stopButton.disabled = true;
 
             showStatus(
@@ -458,9 +444,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 'Unable to stop the camera properly.',
                 'error'
             );
-
         }
-
     }
 
     /*
@@ -477,11 +461,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const token = String(decodedText).trim();
 
-        /*
-         * Permanent member QR tokens must contain
-         * exactly 64 hexadecimal characters.
-         */
-
         if (!/^[a-f0-9]{64}$/i.test(token)) {
 
             showStatus(
@@ -493,10 +472,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const now = Date.now();
-
-        /*
-         * Prevent rapid duplicate scans.
-         */
 
         if (
             token === lastToken &&
@@ -531,7 +506,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         processing = true;
-
         lastToken = token;
         lastScanTime = now;
 
@@ -544,33 +518,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const formData = new FormData();
 
-            /*
-             * IMPORTANT:
-             * The PHP processor requires this action.
-             */
-
             formData.append('action', 'record_qr');
-
             formData.append('qr_token', token);
-
             formData.append('mass_date', massDate);
-
             formData.append('mass_time', massTime);
-
             formData.append('csrf_token', csrfToken);
 
             const response = await fetch(processUrl, {
-
                 method: 'POST',
-
                 body: formData,
-
                 credentials: 'same-origin',
-
                 headers: {
                     'Accept': 'application/json'
                 }
-
             });
 
             const responseText = await response.text();
@@ -578,9 +538,7 @@ document.addEventListener('DOMContentLoaded', function () {
             let result;
 
             try {
-
                 result = JSON.parse(responseText);
-
             } catch (error) {
 
                 console.error(
@@ -588,15 +546,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     responseText
                 );
 
+                if (response.redirected) {
+                    throw new Error(
+                        'Your login session may have expired. Refresh the page and log in again.'
+                    );
+                }
+
                 throw new Error(
                     'The server returned an invalid response. Check the Render logs.'
                 );
-
             }
-
-            /*
-             * Handle already-recorded attendance.
-             */
 
             if (result.already_recorded) {
 
@@ -623,21 +582,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            /*
-             * Successful attendance.
-             */
-
             showStatus(
                 'ATTENDANCE RECORDED — ' +
-                result.member_name +
+                (result.member_name || 'Member') +
                 ' | ' +
-                result.member_code +
+                (result.member_code || '') +
                 ' | ' +
-                result.mass_date +
+                (result.mass_date || massDate) +
                 ' | ' +
-                result.mass_time +
+                (result.mass_time || massTime) +
                 ' | ' +
-                result.check_in_time,
+                (result.check_in_time || ''),
                 'success'
             );
 
@@ -654,21 +609,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
             processing = false;
 
-            /*
-             * Keep the same token from being processed
-             * repeatedly for a short period.
-             */
-
-            setTimeout(function () {
+            // Prevent the same QR token from being processed immediately.
+            window.setTimeout(function () {
 
                 if (Date.now() - lastScanTime >= 3000) {
                     lastToken = '';
                 }
 
             }, 3100);
-
         }
-
     }
 
     /*
@@ -677,15 +626,8 @@ document.addEventListener('DOMContentLoaded', function () {
     |--------------------------------------------------------------------------
     */
 
-    startButton.addEventListener(
-        'click',
-        startScanner
-    );
-
-    stopButton.addEventListener(
-        'click',
-        stopScanner
-    );
+    startButton.addEventListener('click', startScanner);
+    stopButton.addEventListener('click', stopScanner);
 
     /*
     |--------------------------------------------------------------------------
@@ -706,14 +648,10 @@ document.addEventListener('DOMContentLoaded', function () {
     window.addEventListener('beforeunload', function () {
 
         if (scannerRunning) {
-
             scanner.stop().catch(function (error) {
                 console.error(error);
             });
-
         }
-
     });
 
 });
-```
