@@ -159,6 +159,8 @@ $allowedMassTimes = [
 
 $allowedAttendanceStatuses = [
     'Present',
+    'Late',
+    'Absent',
     'Excused'
 ];
 
@@ -274,14 +276,18 @@ if (
 ) {
     sendAttendanceResponse(
         false,
-        'Invalid Mass date. Please select a valid date.'
+        'Invalid Mass date. Please select a valid date.',
+        [],
+        400
     );
 }
 
 if ($massDate > date('Y-m-d')) {
     sendAttendanceResponse(
         false,
-        'You cannot record attendance for a future date.'
+        'You cannot record attendance for a future date.',
+        [],
+        400
     );
 }
 
@@ -296,13 +302,15 @@ $massTime = trim((string)($_POST['mass_time'] ?? ''));
 if (!in_array($massTime, $allowedMassTimes, true)) {
     sendAttendanceResponse(
         false,
-        'Invalid Mass schedule.'
+        'Invalid Mass schedule.',
+        [],
+        400
     );
 }
 
 /*
 |--------------------------------------------------------------------------
-| FIND MEMBER
+| FIND MEMBER AND PROCESS ATTENDANCE
 |--------------------------------------------------------------------------
 */
 
@@ -323,7 +331,9 @@ try {
         if (!preg_match('/^[a-f0-9]{64}$/i', $qrToken)) {
             sendAttendanceResponse(
                 false,
-                'Invalid QR code. The QR token is not valid.'
+                'Invalid QR code. The QR token is not valid.',
+                [],
+                400
             );
         }
 
@@ -361,7 +371,9 @@ try {
         if (!$memberId || $memberId <= 0) {
             sendAttendanceResponse(
                 false,
-                'Invalid member ID.'
+                'Invalid member ID.',
+                [],
+                400
             );
         }
 
@@ -394,7 +406,9 @@ try {
             false,
             $action === 'record_qr'
                 ? 'No member is associated with this QR code.'
-                : 'Member not found.'
+                : 'Member not found.',
+            [],
+            404
         );
     }
 
@@ -411,7 +425,9 @@ try {
     if ($memberStatus !== 'active') {
         sendAttendanceResponse(
             false,
-            'This member is not active and cannot be recorded.'
+            'This member is not active and cannot be recorded.',
+            [],
+            400
         );
     }
 
@@ -439,7 +455,9 @@ try {
         )) {
             sendAttendanceResponse(
                 false,
-                'Invalid attendance status.'
+                'Invalid attendance status.',
+                [],
+                400
             );
         }
 
@@ -497,7 +515,8 @@ try {
                 'check_in_time' => $existingCheckIn,
                 'attendance_method' => $existing['attendance_method'],
                 'already_recorded' => true
-            ]
+            ],
+            409
         );
     }
 
@@ -506,10 +525,10 @@ try {
     | CHECK RECORDED_BY COLUMN REQUIREMENTS
     |--------------------------------------------------------------------------
     |
-    | The insert below does not guess an administrator session key.
+    | This insert does not guess the administrator session key.
     | If recorded_by is nullable or has a database default, PostgreSQL
-    | can handle it. If it is required without a default, the system
-    | returns a clear error instead of silently assigning a false ID.
+    | can handle it. If it is required without a default, an error
+    | is returned instead of assigning an incorrect administrator ID.
     |--------------------------------------------------------------------------
     */
 
@@ -547,6 +566,18 @@ try {
 
     /*
     |--------------------------------------------------------------------------
+    | CHECK-IN TIME
+    |--------------------------------------------------------------------------
+    |
+    | Present = current check-in time
+    | Late = current check-in time
+    | Absent = NULL
+    | Excused = NULL
+    |--------------------------------------------------------------------------
+    */
+
+    /*
+    |--------------------------------------------------------------------------
     | INSERT ATTENDANCE
     |--------------------------------------------------------------------------
     */
@@ -565,7 +596,11 @@ try {
             CAST(:mass_date AS DATE),
             :mass_time,
             :attendance_status,
-            CURRENT_TIMESTAMP,
+            CASE
+                WHEN :check_status IN ('Absent', 'Excused')
+                    THEN NULL
+                ELSE CURRENT_TIMESTAMP
+            END,
             :attendance_method
         )
         RETURNING
@@ -580,6 +615,7 @@ try {
         ':mass_date' => $massDate,
         ':mass_time' => $massTime,
         ':attendance_status' => $attendanceStatus,
+        ':check_status' => $attendanceStatus,
         ':attendance_method' => $attendanceMethod
     ]);
 

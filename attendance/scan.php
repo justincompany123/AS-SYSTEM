@@ -44,6 +44,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
 <style>
 .attendance-container {
     width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
     padding: 24px;
     box-sizing: border-box;
 }
@@ -89,7 +91,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 .attendance-form {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 15px;
     margin-bottom: 22px;
 }
@@ -217,6 +219,24 @@ require_once __DIR__ . '/../includes/sidebar.php';
     background: #e09b35;
 }
 
+.btn-danger {
+    background: #dc3545;
+    color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #bb2d3b;
+}
+
+.btn-info {
+    background: #0dcaf0;
+    color: #172b4d;
+}
+
+.btn-info:hover:not(:disabled) {
+    background: #31d2f2;
+}
+
 .scan-result {
     display: none;
     margin-top: 18px;
@@ -274,6 +294,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
     padding: 15px;
     border-radius: 10px;
     background: #fff;
+    min-width: 0;
 }
 
 .member-item strong {
@@ -281,22 +302,24 @@ require_once __DIR__ . '/../includes/sidebar.php';
     margin-bottom: 5px;
     color: #17365d;
     font-size: 15px;
+    overflow-wrap: anywhere;
 }
 
 .member-item small {
     color: #777;
+    overflow-wrap: anywhere;
 }
 
 .member-item-actions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-top: 12px;
 }
 
 .member-item-actions button {
-    flex: 1;
-    min-width: 100px;
+    width: 100%;
+    min-width: 0;
 }
 
 .empty-message {
@@ -306,6 +329,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
     border: 1px dashed #ddd;
     border-radius: 8px;
     font-size: 14px;
+    overflow-wrap: anywhere;
 }
 
 .instructions-list,
@@ -353,11 +377,13 @@ require_once __DIR__ . '/../includes/sidebar.php';
     }
 
     .member-item-actions {
-        flex-direction: column;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .member-item-actions button {
         width: 100%;
+        padding: 10px 6px;
+        font-size: 13px;
     }
 
     .tab-button {
@@ -370,7 +396,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <div class="attendance-header">
         <h2>QR Code Attendance Scanner</h2>
-        <p>Scan an altar server's QR code or search for a member manually to record Mass attendance.</p>
+        <p>
+            Scan an altar server's QR code or search for a member manually
+            to record Mass attendance.
+        </p>
     </div>
 
     <div class="attendance-layout">
@@ -493,6 +522,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <li>Select the correct Mass schedule.</li>
                 <li>Click Start Scanner or choose Manual Search.</li>
                 <li>Scan the member's QR code or search for their name.</li>
+                <li>For manual attendance, select the correct status button.</li>
                 <li>Wait for the attendance confirmation.</li>
             </ol>
 
@@ -600,7 +630,10 @@ async function sendRequest(formData) {
         });
     } catch (error) {
         console.error('Network error:', error);
-        throw new Error('Unable to connect to the attendance server. Check your internet connection.');
+
+        throw new Error(
+            'Unable to connect to the attendance server. Check your internet connection.'
+        );
     }
 
     const responseText = await response.text();
@@ -615,7 +648,9 @@ async function sendRequest(formData) {
         result = JSON.parse(responseText);
     } catch (error) {
         if (response.redirected) {
-            throw new Error('Your session may have expired. Log in again and refresh this page.');
+            throw new Error(
+                'Your session may have expired. Log in again and refresh this page.'
+            );
         }
 
         throw new Error(
@@ -642,14 +677,20 @@ async function startScanner() {
     }
 
     if (typeof Html5Qrcode === 'undefined') {
-        showResult('QR scanner library could not load. Check your internet connection.', 'error');
+        showResult(
+            'QR scanner library could not load. Check your internet connection.',
+            'error'
+        );
         return;
     }
 
     try {
         startButton.disabled = true;
 
-        showResult('Starting camera. Please allow camera access.', 'info');
+        showResult(
+            'Starting camera. Please allow camera access.',
+            'info'
+        );
 
         if (!html5QrCode) {
             html5QrCode = new Html5Qrcode('reader');
@@ -672,7 +713,10 @@ async function startScanner() {
         startButton.disabled = true;
         stopButton.disabled = false;
 
-        showResult('Scanner started. Point the camera at a member QR code.', 'info');
+        showResult(
+            'Scanner started. Point the camera at a member QR code.',
+            'info'
+        );
 
     } catch (error) {
         console.error('Scanner start error:', error);
@@ -704,7 +748,11 @@ async function stopScanner() {
 
     } catch (error) {
         console.error('Scanner stop error:', error);
-        showResult('Unable to stop the scanner properly.', 'error');
+
+        showResult(
+            'Unable to stop the scanner properly.',
+            'error'
+        );
     }
 }
 
@@ -716,7 +764,10 @@ async function recordQrAttendance(decodedText) {
     const token = String(decodedText).trim();
 
     if (!/^[a-f0-9]{64}$/i.test(token)) {
-        showResult('Invalid QR code. Please scan an official member QR card.', 'error');
+        showResult(
+            'Invalid QR code. Please scan an official member QR card.',
+            'error'
+        );
         return;
     }
 
@@ -761,7 +812,10 @@ async function recordQrAttendance(decodedText) {
         }
 
         if (!result.success) {
-            showResult(result.message || 'Unable to record attendance.', 'error');
+            showResult(
+                result.message || 'Unable to record attendance.',
+                'error'
+            );
             return;
         }
 
@@ -778,7 +832,11 @@ async function recordQrAttendance(decodedText) {
 
     } catch (error) {
         console.error('QR attendance error:', error);
-        showResult(error.message || 'Unable to contact the attendance server.', 'error');
+
+        showResult(
+            error.message || 'Unable to contact the attendance server.',
+            'error'
+        );
 
     } finally {
         processingScan = false;
@@ -789,6 +847,7 @@ async function searchMembers(search) {
     const requestNumber = ++searchRequestNumber;
 
     const formData = new FormData();
+
     formData.append('action', 'search');
     formData.append('csrf_token', CSRF_TOKEN);
     formData.append('search', search);
@@ -850,6 +909,7 @@ function renderMembers(members) {
                 </small>
 
                 <div class="member-item-actions">
+
                     <button
                         type="button"
                         class="btn btn-success"
@@ -863,10 +923,29 @@ function renderMembers(members) {
                         type="button"
                         class="btn btn-warning"
                         data-member-id="${memberId}"
+                        data-status="Late"
+                    >
+                        Late
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn btn-danger"
+                        data-member-id="${memberId}"
+                        data-status="Absent"
+                    >
+                        Absent
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn btn-info"
+                        data-member-id="${memberId}"
                         data-status="Excused"
                     >
                         Excused
                     </button>
+
                 </div>
             </div>
         `;
@@ -897,7 +976,14 @@ async function recordManualAttendance(memberId, status, button) {
         return;
     }
 
-    if (!['Present', 'Excused'].includes(status)) {
+    const allowedStatuses = [
+        'Present',
+        'Late',
+        'Absent',
+        'Excused'
+    ];
+
+    if (!allowedStatuses.includes(status)) {
         showResult('Invalid attendance status.', 'error');
         return;
     }
@@ -906,9 +992,18 @@ async function recordManualAttendance(memberId, status, button) {
         return;
     }
 
+    const confirmed = window.confirm(
+        'Record this member as "' + status + '" for the selected Mass?'
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
     manualRequestRunning = true;
 
     const originalText = button.textContent;
+
     button.disabled = true;
     button.textContent = 'Saving...';
 
@@ -936,7 +1031,10 @@ async function recordManualAttendance(memberId, status, button) {
         }
 
         if (!result.success) {
-            showResult(result.message || 'Unable to record attendance.', 'error');
+            showResult(
+                result.message || 'Unable to record attendance.',
+                'error'
+            );
             return;
         }
 
@@ -954,7 +1052,11 @@ async function recordManualAttendance(memberId, status, button) {
 
     } catch (error) {
         console.error('Manual attendance error:', error);
-        showResult(error.message || 'Unable to record manual attendance.', 'error');
+
+        showResult(
+            error.message || 'Unable to record manual attendance.',
+            'error'
+        );
 
     } finally {
         manualRequestRunning = false;
