@@ -13,8 +13,7 @@ require_once __DIR__ . '/includes/auth.php';
 // Already logged in? Go to dashboard.
 redirectIfLoggedIn();
 
-// Show loading screen only on the first login-page visit
-// during this PHP session.
+// Show loading screen only on the first login-page visit.
 $showInitialLoading = empty($_SESSION['initial_loading_screen_shown']);
 
 if ($showInitialLoading) {
@@ -165,19 +164,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             box-sizing: border-box;
         }
 
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
             min-height: 100vh;
             font-family: 'Inter', sans-serif;
             background: var(--ivory);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 25px;
+            padding: 35px 20px 60px;
+            color: var(--text);
         }
+
+        /* =========================================
+           MAIN PAGE WRAPPER
+        ========================================= */
+
+        .site-container {
+            width: 100%;
+            max-width: 1050px;
+            margin: 0 auto;
+        }
+
+        /* =========================================
+           LOGIN PAGE
+        ========================================= */
 
         .page-wrapper {
             width: 100%;
-            max-width: 1050px;
             min-height: 610px;
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -424,17 +438,317 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             letter-spacing: 1px;
         }
 
-        /* MOBILE */
+        /* =========================================
+           ANNOUNCEMENT SECTION
+        ========================================= */
+
+        .announcement-section {
+            margin-top: 35px;
+        }
+
+        .announcement-card {
+            background: #ffffff;
+            border: 1px solid #e8e2d7;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0,0,0,.05);
+        }
+
+        .announcement-top {
+            background: #263c32;
+            color: white;
+            padding: 23px 28px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .announcement-icon {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            display: grid;
+            place-items: center;
+            background: rgba(255,255,255,.13);
+            border-radius: 50%;
+            font-size: 23px;
+        }
+
+        .announcement-top small {
+            display: block;
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: #e0cda7;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .announcement-top h2 {
+            font-size: 21px;
+            line-height: 1.5;
+            color: white;
+        }
+
+        .announcement-body {
+            padding: 28px;
+        }
+
+        .announcement-label {
+            display: inline-block;
+            color: #947343;
+            background: #f6f0e5;
+            border-radius: 30px;
+            padding: 7px 13px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+
+        .announcement-body > p {
+            color: #606060;
+            font-size: 14px;
+            line-height: 1.9;
+            margin-bottom: 20px;
+        }
+
+        .announcement-body h3 {
+            color: #263c32;
+            font-size: 16px;
+            margin: 22px 0 13px;
+        }
+
+        .application-details {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 13px;
+            margin-top: 15px;
+        }
+
+        .application-item {
+            background: #faf9f6;
+            border: 1px solid #eeeae2;
+            border-radius: 10px;
+            padding: 16px;
+        }
+
+        .application-item.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .application-item strong {
+            display: block;
+            font-size: 11px;
+            letter-spacing: 1px;
+            color: #947343;
+            margin-bottom: 8px;
+        }
+
+        .application-item p {
+            font-size: 13px;
+            color: #555;
+            line-height: 1.8;
+            overflow-wrap: anywhere;
+        }
+
+        .announcement-about {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #eeeae2;
+        }
+
+        .announcement-about h3 {
+            margin-top: 0;
+        }
+
+        .announcement-about p {
+            color: #606060;
+            font-size: 13px;
+            line-height: 1.9;
+            margin-bottom: 13px;
+        }
+
+        .announcement-footer {
+            background: #faf9f6;
+            border-top: 1px solid #eeeae2;
+            padding: 17px 28px;
+            color: #947343;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+        }
+
+        /* =========================================
+           MASS SCHEDULE
+        ========================================= */
+
+        .mass-schedule-section {
+            margin-top: 42px;
+        }
+
+        .section-heading {
+            margin-bottom: 18px;
+        }
+
+        .section-heading h2 {
+            font-family: 'Cinzel', serif;
+            color: var(--navy);
+            font-size: 23px;
+            margin-bottom: 8px;
+        }
+
+        .section-heading p {
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .mass-schedule-image {
+            width: 100%;
+            min-height: 250px;
+            aspect-ratio: 16 / 7;
+            background: #f0f1f2;
+            border: 1px solid #e3e3e3;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .mass-schedule-image img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            min-height: 250px;
+            object-fit: contain;
+        }
+
+        /* =========================================
+           MINISTRY GALLERY
+        ========================================= */
+
+        .ministry-gallery {
+            margin-top: 45px;
+        }
+
+        .gallery-heading {
+            margin-bottom: 22px;
+        }
+
+        .gallery-heading h2 {
+            font-family: 'Cinzel', serif;
+            color: var(--navy);
+            font-size: 23px;
+            margin-bottom: 8px;
+        }
+
+        .gallery-heading p {
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 20px;
+        }
+
+        .gallery-card {
+            background: #fff;
+            border: 1px solid #e9e4da;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,.04);
+            transition: .25s ease;
+        }
+
+        .gallery-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 9px 24px rgba(0,0,0,.08);
+        }
+
+        .gallery-image {
+            width: 100%;
+            height: 205px;
+            background: #f0f1f2;
+            border-bottom: 1px solid #e8e8e8;
+            overflow: hidden;
+        }
+
+        .gallery-image img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+        }
+
+        .gallery-info {
+            padding: 18px;
+        }
+
+        .gallery-category {
+            display: inline-block;
+            color: #947343;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 9px;
+        }
+
+        .gallery-info h3 {
+            color: var(--navy);
+            font-size: 16px;
+            margin-bottom: 9px;
+        }
+
+        .gallery-info p {
+            color: #777;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        /* =========================================
+           BOTTOM FOOTER
+        ========================================= */
+
+        .page-bottom-footer {
+            text-align: center;
+            margin-top: 45px;
+            padding: 22px 10px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 10px;
+            line-height: 1.9;
+        }
+
+        .page-bottom-footer strong {
+            font-family: 'Cinzel', serif;
+            color: var(--gold);
+            letter-spacing: 2px;
+        }
+
+        /* =========================================
+           RESPONSIVE DESIGN
+        ========================================= */
+
+        @media(max-width: 850px) {
+
+            .gallery-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+        }
 
         @media(max-width: 750px) {
 
             body {
-                padding: 15px;
+                padding: 18px 12px 40px;
             }
 
             .page-wrapper {
                 grid-template-columns: 1fr;
                 max-width: 460px;
+                margin: auto;
             }
 
             .brand-panel {
@@ -467,6 +781,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .login-heading {
                 margin-bottom: 25px;
             }
+
+            .announcement-section {
+                margin-top: 25px;
+            }
+
+            .announcement-top {
+                padding: 18px;
+            }
+
+            .announcement-top h2 {
+                font-size: 17px;
+            }
+
+            .announcement-body {
+                padding: 20px;
+            }
+
+            .application-details {
+                grid-template-columns: 1fr;
+            }
+
+            .application-item.full-width {
+                grid-column: auto;
+            }
+
+            .announcement-footer {
+                padding: 15px 20px;
+            }
+
+            .mass-schedule-image {
+                aspect-ratio: 4 / 3;
+            }
+
+        }
+
+        @media(max-width: 500px) {
+
+            .gallery-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .gallery-image {
+                height: 220px;
+            }
+
+            .section-heading h2,
+            .gallery-heading h2 {
+                font-size: 20px;
+            }
+
         }
 
     </style>
@@ -476,142 +840,566 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 
 <?php if ($showInitialLoading): ?>
+
     <div id="loading-screen">
+
         <h1 class="loading-title">
             THE KABANKALAN CATHEDRAL MINISTRY OF THE ALTAR SERVERS SYSTEM
         </h1>
+
     </div>
+
 <?php endif; ?>
 
-<div class="page-wrapper">
 
-    <!-- CHURCH BRANDING -->
+<div class="site-container">
 
-    <section class="brand-panel">
+    <!-- ==========================================
+         LOGIN SECTION
+    =========================================== -->
 
-        <div class="cross-emblem">✝</div>
+    <div class="page-wrapper">
 
-        <div class="cathedral-name">
-            St. Francis Xavier Cathedral
-        </div>
+        <!-- CHURCH BRANDING -->
 
-        <h1>ALTAR SERVERS</h1>
+        <section class="brand-panel">
 
-        <p class="subtitle">
-            MINISTRY MANAGEMENT SYSTEM
-        </p>
+            <div class="cross-emblem">✝</div>
 
-        <div class="brand-divider"></div>
+            <div class="cathedral-name">
+                St. Francis Xavier Cathedral
+            </div>
 
-        <div class="brand-motto">
-            AMARE ET SERVIRE
-        </div>
+            <h1>ALTAR SERVERS</h1>
 
-        <div class="brand-translation">
-            To Love and To Serve
+            <p class="subtitle">
+                MINISTRY MANAGEMENT SYSTEM
+            </p>
+
+            <div class="brand-divider"></div>
+
+            <div class="brand-motto">
+                AMARE ET SERVIRE
+            </div>
+
+            <div class="brand-translation">
+                To Love and To Serve
+            </div>
+
+        </section>
+
+
+        <!-- LOGIN FORM -->
+
+        <section class="login-panel">
+
+            <div class="login-heading">
+
+                <div class="small-title">
+                    Administrator Portal
+                </div>
+
+                <h2>Welcome Back</h2>
+
+                <p>
+                    Sign in to access the Altar Servers Management System
+                    and manage ministry activities.
+                </p>
+
+            </div>
+
+
+            <?php if ($error !== ''): ?>
+
+                <div class="error-message">
+
+                    <?= htmlspecialchars(
+                        $error,
+                        ENT_QUOTES,
+                        'UTF-8'
+                    ) ?>
+
+                </div>
+
+            <?php endif; ?>
+
+
+            <!--
+            IMPORTANT:
+            This form posts to log-in.php.
+            If your actual public login route is /login.php,
+            change the action below to /login.php.
+            -->
+
+            <form method="POST" action="/log-in.php">
+
+                <div class="form-group">
+
+                    <label for="username">USERNAME</label>
+
+                    <div class="input-wrapper">
+
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            placeholder="Enter your username"
+                            value="<?= htmlspecialchars(
+                                $username,
+                                ENT_QUOTES,
+                                'UTF-8'
+                            ) ?>"
+                            autocomplete="username"
+                            required
+                            autofocus
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="password">PASSWORD</label>
+
+                    <div class="input-wrapper">
+
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            class="password-input"
+                            placeholder="Enter your password"
+                            autocomplete="current-password"
+                            required
+                        >
+
+                        <button
+                            type="button"
+                            class="toggle-password"
+                            id="togglePassword"
+                        >
+                            SHOW
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <button type="submit" class="login-button">
+                    SIGN IN
+                </button>
+
+            </form>
+
+
+            <footer class="login-footer">
+
+                <strong>AMARE ET SERVIRE</strong><br>
+
+                St. Francis Xavier Cathedral<br>
+
+                ALTAR SERVERS WEB &copy; <?= date('Y') ?>
+
+            </footer>
+
+        </section>
+
+    </div>
+
+
+    <!-- ==========================================
+         ANNOUNCEMENT SECTION
+    =========================================== -->
+
+    <section class="announcement-section">
+
+        <div class="announcement-card">
+
+            <div class="announcement-top">
+
+                <div class="announcement-icon">
+                    📢
+                </div>
+
+                <div>
+
+                    <small>
+                        ST. FRANCIS XAVIER CATHEDRAL
+                    </small>
+
+                    <h2>
+                        CALL FOR NEW ALTAR SERVERS!
+                    </h2>
+
+                </div>
+
+            </div>
+
+
+            <div class="announcement-body">
+
+                <span class="announcement-label">
+                    OFFICIAL MINISTRY ANNOUNCEMENT
+                </span>
+
+                <p>
+                    The Ministry of the Altar Servers is now officially
+                    accepting applications! If you feel called to serve
+                    God and our parish community at the Holy Altar, we
+                    invite you to join our ministry.
+                </p>
+
+
+                <h3>How to Apply</h3>
+
+                <div class="application-details">
+
+                    <div class="application-item full-width">
+
+                        <strong>VISIT US</strong>
+
+                        <p>
+                            New St. Francis Xavier Cathedral,
+                            Hda. Clementina, Brgy. Talubangi,
+                            Kabankalan City, Negros Occidental
+                            6111, Philippines.
+                        </p>
+
+                    </div>
+
+
+                    <div class="application-item">
+
+                        <strong>CONTACT PERSON</strong>
+
+                        <p>
+                            Justin Ramos
+                        </p>
+
+                    </div>
+
+
+                    <div class="application-item">
+
+                        <strong>FACEBOOK</strong>
+
+                        <p>
+                            Visit the official Facebook page
+                            of the Ministry of Altar Servers.
+                        </p>
+
+                        <!-- Add your verified Facebook page link here later. -->
+
+                    </div>
+
+                </div>
+
+
+                <div class="announcement-about">
+
+                    <h3>
+                        About the Ministry of Altar Servers
+                    </h3>
+
+                    <p>
+                        The Ministry of Altar Servers is a dedicated
+                        group of young men and women who assist the
+                        clergy during the celebration of the Holy Mass
+                        and other liturgical services.
+                    </p>
+
+                    <p>
+                        Members learn the traditions, reverence, and
+                        procedures of the Church's liturgy while growing
+                        in faith, discipline, and fellowship with fellow
+                        servers.
+                    </p>
+
+                    <p>
+                        Serving at the altar is a privileged opportunity
+                        to draw closer to Christ and actively participate
+                        in the spiritual life of the parish.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="announcement-footer">
+
+                AMARE ET SERVIRE — TO LOVE AND TO SERVE
+
+            </div>
+
         </div>
 
     </section>
 
-    <!-- LOGIN FORM -->
 
-    <section class="login-panel">
+    <!-- ==========================================
+         MASS SCHEDULE IMAGE
+    =========================================== -->
 
-        <div class="login-heading">
+    <section class="mass-schedule-section">
 
-            <div class="small-title">
-                Administrator Portal
-            </div>
+        <div class="section-heading">
 
-            <h2>Welcome Back</h2>
+            <h2>MASS SCHEDULE</h2>
 
             <p>
-                Sign in to access the Altar Servers Management System
-                and manage ministry activities.
+                View the official Mass schedule of
+                St. Francis Xavier Cathedral.
             </p>
 
         </div>
 
-        <?php if ($error !== ''): ?>
 
-            <div class="error-message">
-                <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+        <div class="mass-schedule-image">
 
-        <?php endif; ?>
+            <!--
+            MASS SCHEDULE IMAGE PLACEHOLDER
 
-        <form method="POST" action="/login.php">
+            Upload your image to:
+            /assets/images/mass-schedule.png
 
-            <div class="form-group">
+            Then replace this comment with:
 
-                <label for="username">USERNAME</label>
+            <img
+                src="/assets/images/mass-schedule.png"
+                alt="St. Francis Xavier Cathedral Mass Schedule"
+            >
+            -->
 
-                <div class="input-wrapper">
-
-                    <input
-                        type="text"
-                        id="username"
-                        name="username"
-                        placeholder="Enter your username"
-                        value="<?= htmlspecialchars($username, ENT_QUOTES, 'UTF-8') ?>"
-                        autocomplete="username"
-                        required
-                        autofocus
-                    >
-
-                </div>
-
-            </div>
-
-            <div class="form-group">
-
-                <label for="password">PASSWORD</label>
-
-                <div class="input-wrapper">
-
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        class="password-input"
-                        placeholder="Enter your password"
-                        autocomplete="current-password"
-                        required
-                    >
-
-                    <button
-                        type="button"
-                        class="toggle-password"
-                        id="togglePassword"
-                    >
-                        SHOW
-                    </button>
-
-                </div>
-
-            </div>
-
-            <button type="submit" class="login-button">
-                SIGN IN
-            </button>
-
-        </form>
-
-        <footer class="login-footer">
-
-            <strong>AMARE ET SERVIRE</strong><br>
-
-            St. Francis Xavier Cathedral<br>
-
-            ALTAR SERVERS WEB &copy; <?= date('Y') ?>
-
-        </footer>
+        </div>
 
     </section>
 
+
+    <!-- ==========================================
+         MINISTRY GALLERY
+    =========================================== -->
+
+    <section class="ministry-gallery">
+
+        <div class="gallery-heading">
+
+            <h2>Ministry Gallery</h2>
+
+            <p>
+                Discover the activities, traditions, and service
+                of the St. Francis Xavier Cathedral Ministry of Altar Servers.
+            </p>
+
+        </div>
+
+
+        <div class="gallery-grid">
+
+
+            <!-- IMAGE 1 -->
+
+            <div class="gallery-card">
+
+                <div class="gallery-image">
+
+                    <!-- ADD MINISTRY IMAGE HERE LATER -->
+
+                </div>
+
+                <div class="gallery-info">
+
+                    <span class="gallery-category">
+                        Ministry Identity
+                    </span>
+
+                    <h3>Our Ministry</h3>
+
+                    <p>
+                        A community of altar servers committed to serving
+                        God and the Church with faith, dedication, and humility.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- IMAGE 2 -->
+
+            <div class="gallery-card">
+
+                <div class="gallery-image">
+
+                    <!-- ADD ALTAR SERVICE IMAGE HERE LATER -->
+
+                </div>
+
+                <div class="gallery-info">
+
+                    <span class="gallery-category">
+                        Liturgical Service
+                    </span>
+
+                    <h3>Serving at the Altar</h3>
+
+                    <p>
+                        Altar servers assisting the priest during the
+                        celebration of the Holy Eucharist.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- IMAGE 3 -->
+
+            <div class="gallery-card">
+
+                <div class="gallery-image">
+
+                    <!-- ADD FORMATION IMAGE HERE LATER -->
+
+                </div>
+
+                <div class="gallery-info">
+
+                    <span class="gallery-category">
+                        Formation
+                    </span>
+
+                    <h3>Training and Formation</h3>
+
+                    <p>
+                        Developing the knowledge, discipline, and
+                        responsibility needed for liturgical service.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- IMAGE 4 -->
+
+            <div class="gallery-card">
+
+                <div class="gallery-image">
+
+                    <!-- ADD CELEBRATION IMAGE HERE LATER -->
+
+                </div>
+
+                <div class="gallery-info">
+
+                    <span class="gallery-category">
+                        Church Celebrations
+                    </span>
+
+                    <h3>Liturgical Celebrations</h3>
+
+                    <p>
+                        Participating in important celebrations and
+                        special occasions of the Church.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- IMAGE 5 -->
+
+            <div class="gallery-card">
+
+                <div class="gallery-image">
+
+                    <!-- ADD FELLOWSHIP IMAGE HERE LATER -->
+
+                </div>
+
+                <div class="gallery-info">
+
+                    <span class="gallery-category">
+                        Community
+                    </span>
+
+                    <h3>Brotherhood and Fellowship</h3>
+
+                    <p>
+                        Building friendship, unity, and a stronger
+                        sense of community among altar servers.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- IMAGE 6 -->
+
+            <div class="gallery-card">
+
+                <div class="gallery-image">
+
+                    <!-- ADD AMARE ET SERVIRE IMAGE HERE LATER -->
+
+                </div>
+
+                <div class="gallery-info">
+
+                    <span class="gallery-category">
+                        Commitment
+                    </span>
+
+                    <h3>Amare et Servire</h3>
+
+                    <p>
+                        Living our ministry motto through love,
+                        commitment, faith, and dedicated service.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+    </section>
+
+
+    <!-- ==========================================
+         PAGE FOOTER
+    =========================================== -->
+
+    <footer class="page-bottom-footer">
+
+        <strong>AMARE ET SERVIRE</strong>
+
+        <p>
+            St. Francis Xavier Cathedral
+        </p>
+
+        <p>
+            Ministry of Altar Servers &copy; <?= date('Y') ?>
+        </p>
+
+    </footer>
+
 </div>
 
+
+<!-- ==========================================
+     PASSWORD VISIBILITY
+=========================================== -->
+
 <script>
+
 const toggleButton = document.getElementById('togglePassword');
 const passwordInput = document.getElementById('password');
 
@@ -628,7 +1416,11 @@ if (toggleButton && passwordInput) {
     });
 
 }
+
 </script>
+
+
+<!-- LOADING SCREEN SCRIPT -->
 
 <script src="/assets/js/loading-screen.js"></script>
 
