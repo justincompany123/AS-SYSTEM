@@ -10,7 +10,7 @@
 
 require_once __DIR__ . '/includes/auth.php';
 
-// Already logged in? Go to dashboard.
+// Redirect logged-in administrators.
 redirectIfLoggedIn();
 
 // Show loading screen only on the first login-page visit.
@@ -20,7 +20,7 @@ if ($showInitialLoading) {
     $_SESSION['initial_loading_screen_shown'] = true;
 }
 
-// Database connection
+// Database connection.
 require_once __DIR__ . '/config/database.php';
 
 $error = '';
@@ -71,24 +71,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 password_verify($password, $admin['password'])
             ) {
 
-                // Regenerate session ID after successful login.
                 if (!session_regenerate_id(true)) {
                     throw new RuntimeException(
                         'Unable to regenerate administrator session.'
                     );
                 }
 
-                // Save administrator information.
                 $_SESSION['admin_id'] = $admin['id'];
                 $_SESSION['username'] = $admin['username'];
                 $_SESSION['admin_name'] = $admin['full_name'];
                 $_SESSION['admin_role'] = $admin['role'];
                 $_SESSION['admin_email'] = $admin['email'];
 
-                // Tell the dashboard to display the loading screen.
                 $_SESSION['show_loading_screen'] = true;
 
-                // Save session before redirect.
                 session_write_close();
 
                 header('Location: /index.php');
@@ -126,23 +122,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>Administrator Login | ALTAR SERVERS</title>
 
-    <link rel="icon" type="image/png" href="/assets/images/favicon.png">
+    <!-- Cathedral logo as favicon -->
+    <link
+        rel="icon"
+        type="image/png"
+        href="/assets/images/cathedral-logo.png"
+    >
 
+    <!-- Loading screen -->
     <link rel="stylesheet" href="/assets/css/loading-screen.css">
 
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
 
-    <link rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossorigin>
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
 
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap"
-          rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet"
+    >
 
     <style>
 
@@ -176,10 +182,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: var(--text);
         }
 
-        /* =========================================
-           MAIN PAGE WRAPPER
-        ========================================= */
-
         .site-container {
             width: 100%;
             max-width: 1050px;
@@ -187,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         /* =========================================
-           LOGIN PAGE
+           LOGIN SECTION
         ========================================= */
 
         .page-wrapper {
@@ -207,10 +209,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .brand-panel {
             background:
                 linear-gradient(
-                    rgba(16,33,55,.91),
-                    rgba(16,33,55,.96)
+                    rgba(16,33,55,.86),
+                    rgba(16,33,55,.94)
                 ),
-                url('/assets/images/background.jpg') center/cover;
+                url('/assets/images/background.jpg') center/cover no-repeat;
 
             color: white;
             padding: 55px 38px;
@@ -244,18 +246,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-width: 0 1px 1px 0;
         }
 
-        .cross-emblem {
-            width: 95px;
-            height: 95px;
-            border: 1px solid var(--gold);
-            border-radius: 50%;
-            display: grid;
-            place-items: center;
-            color: var(--gold-light);
-            font-family: 'Cinzel', serif;
-            font-size: 54px;
-            margin-bottom: 27px;
-            box-shadow: 0 0 0 7px rgba(177,138,67,.08);
+        .cathedral-logo {
+            width: 105px;
+            height: 105px;
+            object-fit: contain;
+            margin-bottom: 25px;
+            filter: drop-shadow(0 4px 12px rgba(0,0,0,.25));
         }
 
         .cathedral-name {
@@ -439,7 +435,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         /* =========================================
-           ANNOUNCEMENT SECTION
+           ANNOUNCEMENT
         ========================================= */
 
         .announcement-section {
@@ -579,7 +575,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         /* =========================================
-           MASS SCHEDULE
+           MASS SCHEDULE IMAGE
         ========================================= */
 
         .mass-schedule-section {
@@ -605,19 +601,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         .mass-schedule-image {
             width: 100%;
-            min-height: 250px;
-            aspect-ratio: 16 / 7;
-            background: #f0f1f2;
+            background: #ffffff;
             border: 1px solid #e3e3e3;
             border-radius: 12px;
             overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,.04);
         }
 
         .mass-schedule-image img {
             display: block;
             width: 100%;
-            height: 100%;
-            min-height: 250px;
+            height: auto;
             object-fit: contain;
         }
 
@@ -679,6 +673,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             height: 100%;
             display: block;
             object-fit: cover;
+            transition: transform .35s ease;
+        }
+
+        .gallery-card:hover .gallery-image img {
+            transform: scale(1.04);
         }
 
         .gallery-info {
@@ -708,7 +707,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         /* =========================================
-           BOTTOM FOOTER
+           PAGE FOOTER
         ========================================= */
 
         .page-bottom-footer {
@@ -755,10 +754,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 padding: 35px 20px;
             }
 
-            .cross-emblem {
-                width: 65px;
-                height: 65px;
-                font-size: 38px;
+            .cathedral-logo {
+                width: 75px;
+                height: 75px;
                 margin-bottom: 17px;
             }
 
@@ -808,10 +806,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             .announcement-footer {
                 padding: 15px 20px;
-            }
-
-            .mass-schedule-image {
-                aspect-ratio: 4 / 3;
             }
 
         }
@@ -864,7 +858,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <section class="brand-panel">
 
-            <div class="cross-emblem">✝</div>
+            <img
+                src="/assets/images/cathedral-logo.png"
+                alt="St. Francis Xavier Cathedral Logo"
+                class="cathedral-logo"
+            >
 
             <div class="cathedral-name">
                 St. Francis Xavier Cathedral
@@ -924,14 +922,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
 
-            <!--
-            IMPORTANT:
-            This form posts to log-in.php.
-            If your actual public login route is /login.php,
-            change the action below to /login.php.
-            -->
+            <!-- The current website URL is /login.php. -->
 
-            <form method="POST" action="/log-in.php">
+            <form method="POST" action="/login.php">
 
                 <div class="form-group">
 
@@ -1091,7 +1084,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             of the Ministry of Altar Servers.
                         </p>
 
-                        <!-- Add your verified Facebook page link here later. -->
+                        <!-- Add your verified Facebook page link here. -->
 
                     </div>
 
@@ -1160,19 +1153,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="mass-schedule-image">
 
-            <!--
-            MASS SCHEDULE IMAGE PLACEHOLDER
-
-            Upload your image to:
-            /assets/images/mass-schedule.png
-
-            Then replace this comment with:
-
             <img
                 src="/assets/images/mass-schedule.png"
-                alt="St. Francis Xavier Cathedral Mass Schedule"
+                alt="Official Mass Schedule of St. Francis Xavier Cathedral"
+                loading="lazy"
             >
-            -->
 
         </div>
 
@@ -1199,14 +1184,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="gallery-grid">
 
-
-            <!-- IMAGE 1 -->
+            <!-- IMAGE 1: OUR MINISTRY -->
 
             <div class="gallery-card">
 
                 <div class="gallery-image">
 
-                    <!-- ADD MINISTRY IMAGE HERE LATER -->
+                    <img
+                        src="/assets/images/ministry.jpg"
+                        alt="St. Francis Xavier Cathedral Ministry of Altar Servers"
+                        loading="lazy"
+                    >
 
                 </div>
 
@@ -1228,13 +1216,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
-            <!-- IMAGE 2 -->
+            <!-- IMAGE 2: SERVING AT THE ALTAR -->
 
             <div class="gallery-card">
 
                 <div class="gallery-image">
 
-                    <!-- ADD ALTAR SERVICE IMAGE HERE LATER -->
+                    <img
+                        src="/assets/images/altar-service.jpg"
+                        alt="Altar servers serving during Holy Mass"
+                        loading="lazy"
+                    >
 
                 </div>
 
@@ -1256,13 +1248,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
-            <!-- IMAGE 3 -->
+            <!-- IMAGE 3: TRAINING AND FORMATION -->
 
             <div class="gallery-card">
 
                 <div class="gallery-image">
 
-                    <!-- ADD FORMATION IMAGE HERE LATER -->
+                    <img
+                        src="/assets/images/formation.jpg"
+                        alt="Altar Servers Training and Formation"
+                        loading="lazy"
+                    >
 
                 </div>
 
@@ -1284,13 +1280,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
-            <!-- IMAGE 4 -->
+            <!-- IMAGE 4: LITURGICAL CELEBRATIONS -->
 
             <div class="gallery-card">
 
                 <div class="gallery-image">
 
-                    <!-- ADD CELEBRATION IMAGE HERE LATER -->
+                    <img
+                        src="/assets/images/celebrations.jpg"
+                        alt="Church and Liturgical Celebrations"
+                        loading="lazy"
+                    >
 
                 </div>
 
@@ -1312,13 +1312,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
-            <!-- IMAGE 5 -->
+            <!-- IMAGE 5: BROTHERHOOD AND FELLOWSHIP -->
 
             <div class="gallery-card">
 
                 <div class="gallery-image">
 
-                    <!-- ADD FELLOWSHIP IMAGE HERE LATER -->
+                    <img
+                        src="/assets/images/fellowship.jpg"
+                        alt="Brotherhood and Fellowship of Altar Servers"
+                        loading="lazy"
+                    >
 
                 </div>
 
@@ -1340,13 +1344,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
-            <!-- IMAGE 6 -->
+            <!-- IMAGE 6: AMARE ET SERVIRE -->
 
             <div class="gallery-card">
 
                 <div class="gallery-image">
 
-                    <!-- ADD AMARE ET SERVIRE IMAGE HERE LATER -->
+                    <img
+                        src="/assets/images/amare-et-servire.jpg"
+                        alt="Amare et Servire - To Love and To Serve"
+                        loading="lazy"
+                    >
 
                 </div>
 
@@ -1366,7 +1374,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
             </div>
-
 
         </div>
 
