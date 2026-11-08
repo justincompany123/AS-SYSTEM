@@ -833,6 +833,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <body>
 
+
 <?php if ($showInitialLoading): ?>
 
     <div id="loading-screen">
