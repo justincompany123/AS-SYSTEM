@@ -1,27 +1,57 @@
 
 /* =========================================
-   ALTAR SERVERS SYSTEM - LOADING SCREEN
-   Display duration: 2 seconds
-   ========================================= */
+   ALTAR SERVERS SYSTEM
+   LOADING SCREEN CONTROLLER
+   Display Duration: 2 Seconds
+========================================= */
 
-document.addEventListener("DOMContentLoaded", function () {
+(function () {
 
-    const loadingScreen = document.getElementById("loading-screen");
+    function initializeLoadingScreen() {
 
-    if (!loadingScreen) {
-        return;
+        const loadingScreen = document.getElementById("loading-screen");
+
+        if (!loadingScreen) {
+            return;
+        }
+
+        // Prevent multiple timers.
+        if (loadingScreen.dataset.initialized === "true") {
+            return;
+        }
+
+        loadingScreen.dataset.initialized = "true";
+
+        // Display loading screen for 2 seconds.
+        setTimeout(function () {
+
+            loadingScreen.classList.add("fade-out");
+
+            // Remove after fade-out animation.
+            setTimeout(function () {
+
+                if (loadingScreen && loadingScreen.parentNode) {
+                    loadingScreen.remove();
+                }
+
+            }, 650);
+
+        }, 2000);
     }
 
-    // Display the loading screen for 2 seconds
-    setTimeout(function () {
+    // Handle both normal and already-loaded documents.
+    if (document.readyState === "loading") {
 
-        loadingScreen.classList.add("fade-out");
+        document.addEventListener(
+            "DOMContentLoaded",
+            initializeLoadingScreen,
+            { once: true }
+        );
 
-        // Remove the loading screen after animation
-        setTimeout(function () {
-            loadingScreen.remove();
-        }, 600);
+    } else {
 
-    }, 2000);
+        initializeLoadingScreen();
 
-});
+    }
+
+})();

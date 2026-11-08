@@ -1,7 +1,8 @@
 
 /* =========================================
    ALTAR SERVERS SYSTEM - LOADING SCREEN
-   ========================================= */
+   Automatic 2-Second Display
+========================================= */
 
 #loading-screen {
     position: fixed;
@@ -9,31 +10,42 @@
     width: 100%;
     height: 100%;
     z-index: 999999;
+
     display: flex;
     justify-content: center;
     align-items: center;
+
     padding: 30px;
     background: #142b4a;
+
     opacity: 1;
     visibility: visible;
-    transition: opacity 0.6s ease, visibility 0.6s ease;
+
+    animation: loadingScreenFallback 2.6s ease forwards;
 }
 
 /* Loading Screen Text */
+
 .loading-title {
     max-width: 900px;
+
     color: #ffffff;
+
     font-family: "Segoe UI", Arial, sans-serif;
     font-size: clamp(22px, 4vw, 42px);
     font-weight: 700;
+
     letter-spacing: 3px;
     line-height: 1.5;
+
     text-align: center;
     text-transform: uppercase;
+
     animation: loadingTextAppear 1s ease both;
 }
 
-/* Fade-out */
+/* JavaScript Fade-Out */
+
 #loading-screen.fade-out {
     opacity: 0;
     visibility: hidden;
@@ -41,6 +53,7 @@
 }
 
 /* Text Animation */
+
 @keyframes loadingTextAppear {
     from {
         opacity: 0;
@@ -53,8 +66,25 @@
     }
 }
 
+/* CSS Fallback: Hide after 2.6 seconds */
+
+@keyframes loadingScreenFallback {
+    0%, 76.9% {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    100% {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+}
+
 /* Mobile Responsive */
+
 @media (max-width: 600px) {
+
     #loading-screen {
         padding: 20px;
     }
@@ -63,4 +93,5 @@
         font-size: 23px;
         letter-spacing: 2px;
     }
+
 }
