@@ -1,106 +1,211 @@
+
 <?php
 /*
 |--------------------------------------------------------------------------
-| ALTAR SERVERS MANAGEMENT SYSTEM
+| AS-SYSTEM
 | SIDEBAR NAVIGATION
 | ST. FRANCIS XAVIER CATHEDRAL
 |--------------------------------------------------------------------------
 */
 
-$currentPage = $activePage ?? '';
+$currentPage = $activePage ?? 'dashboard';
+
+// Navigation items
+$navigationItems = [
+
+    [
+        'label' => 'Dashboard',
+        'icon' => '⌂',
+        'url' => '/index.php',
+        'page' => 'dashboard'
+    ],
+
+    [
+        'label' => 'Members',
+        'icon' => '♙',
+        'url' => '/members/index.php',
+        'page' => 'members'
+    ],
+
+    [
+        'label' => 'Register New Member',
+        'icon' => '＋',
+        'url' => '/members/add.php',
+        'page' => 'add-member'
+    ],
+
+    [
+        'label' => 'Archived Members',
+        'icon' => '▤',
+        'url' => '/members/archived.php',
+        'page' => 'archived'
+    ],
+
+    [
+        'label' => 'Attendance Records',
+        'icon' => '◷',
+        'url' => '/attendance/index.php',
+        'page' => 'attendance'
+    ],
+
+    [
+        'label' => 'QR Attendance Scanner',
+        'icon' => '▦',
+        'url' => '/attendance/scan.php',
+        'page' => 'scanner'
+    ]
+
+];
+
 ?>
 
-<aside class="sidebar" id="sidebar">
+<!-- ==========================================
+     SIDEBAR
+=========================================== -->
 
-    <!-- SIDEBAR BRAND -->
+<aside
+    class="sidebar"
+    id="sidebar"
+>
+
+
+    <!-- ======================================
+         SIDEBAR BRAND
+    ======================================= -->
+
     <div class="sidebar-brand">
 
+
+        <!-- LOGO -->
+
         <div class="sidebar-logo">
+
             ✝
+
         </div>
+
+
+        <!-- BRAND INFORMATION -->
 
         <div class="sidebar-brand-text">
-            <h2>ALTAR SERVERS</h2>
-            <span>ST. FRANCIS XAVIER CATHEDRAL</span>
+
+            <h2>
+                ALTAR SERVERS
+            </h2>
+
+            <span>
+                ST. FRANCIS XAVIER CATHEDRAL
+            </span>
+
         </div>
 
     </div>
 
-    <!-- MAIN MENU -->
+
+    <!-- ======================================
+         MAIN MENU LABEL
+    ======================================= -->
+
     <div class="sidebar-section-label">
+
         MAIN MENU
+
     </div>
 
-    <nav class="sidebar-nav">
 
-        <!-- DASHBOARD -->
-        <a
-            href="/index.php"
-            class="<?= $currentPage === 'dashboard' ? 'active' : '' ?>"
-        >
-            <span class="nav-icon">⌂</span>
-            <span>Dashboard</span>
-        </a>
+    <!-- ======================================
+         NAVIGATION
+    ======================================= -->
 
-        <!-- MEMBERS LIST -->
-        <a
-            href="/members/index.php"
-            class="<?= $currentPage === 'members' ? 'active' : '' ?>"
-        >
-            <span class="nav-icon">♙</span>
-            <span>Members</span>
-        </a>
+    <nav
+        class="sidebar-nav"
+        aria-label="Main navigation"
+    >
 
-        <!-- ADD NEW MEMBER -->
-        <a
-            href="/members/add.php"
-            class="<?= $currentPage === 'add-member' ? 'active' : '' ?>"
-        >
-            <span class="nav-icon">＋</span>
-            <span>Register New Member</span>
-        </a>
+        <?php foreach ($navigationItems as $item): ?>
 
-        <!-- ARCHIVED MEMBERS -->
-        <a
-            href="/members/archived.php"
-            class="<?= $currentPage === 'archived' ? 'active' : '' ?>"
-        >
-            <span class="nav-icon">▤</span>
-            <span>Archived Members</span>
-        </a>
+            <?php
 
-        <!-- ATTENDANCE RECORDS -->
-        <a
-            href="/attendance/index.php"
-            class="<?= $currentPage === 'attendance' ? 'active' : '' ?>"
-        >
-            <span class="nav-icon">◷</span>
-            <span>Attendance Records</span>
-        </a>
+            $isActive = (
+                $currentPage === $item['page']
+            );
 
-        <!-- QR ATTENDANCE SCANNER -->
-        <a
-            href="/attendance/scan.php"
-            class="<?= $currentPage === 'scanner' ? 'active' : '' ?>"
-        >
-            <span class="nav-icon">▦</span>
-            <span>QR Attendance Scanner</span>
-        </a>
+            ?>
+
+            <a
+                href="<?= htmlspecialchars(
+                    $item['url'],
+                    ENT_QUOTES,
+                    'UTF-8'
+                ) ?>"
+                class="<?= $isActive ? 'active' : '' ?>"
+                <?= $isActive ? 'aria-current="page"' : '' ?>
+            >
+
+                <span class="nav-icon">
+
+                    <?= htmlspecialchars(
+                        $item['icon'],
+                        ENT_QUOTES,
+                        'UTF-8'
+                    ) ?>
+
+                </span>
+
+                <span class="nav-label">
+
+                    <?= htmlspecialchars(
+                        $item['label'],
+                        ENT_QUOTES,
+                        'UTF-8'
+                    ) ?>
+
+                </span>
+
+            </a>
+
+        <?php endforeach; ?>
 
     </nav>
 
-    <!-- SIDEBAR BOTTOM -->
+
+    <!-- ======================================
+         SIDEBAR BOTTOM
+    ======================================= -->
+
     <div class="sidebar-bottom">
 
+
+        <!-- MINISTRY MOTTO -->
+
         <div class="sidebar-motto">
-            <strong>AMARE ET SERVIRE</strong>
-            <span>To Love and To Serve</span>
+
+            <strong>
+                AMARE ET SERVIRE
+            </strong>
+
+            <span>
+                To Love and To Serve
+            </span>
+
         </div>
 
+
         <!-- LOGOUT -->
-        <a href="/logout.php" class="sidebar-logout">
-            <span class="nav-icon">↪</span>
-            <span>Logout</span>
+
+        <a
+            href="/logout.php"
+            class="sidebar-logout"
+        >
+
+            <span class="nav-icon">
+                ↪
+            </span>
+
+            <span class="nav-label">
+                Logout
+            </span>
+
         </a>
 
     </div>

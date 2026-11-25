@@ -1,14 +1,20 @@
+
 <?php
 /*
 |--------------------------------------------------------------------------
-| ALTAR SERVERS WEB SYSTEM
+| AS-SYSTEM
 | SHARED PAGE FOOTER
 | ST. FRANCIS XAVIER CATHEDRAL
 |--------------------------------------------------------------------------
 */
+
+date_default_timezone_set('Asia/Manila');
+
 ?>
 
-            <!-- PAGE FOOTER -->
+            <!-- ==================================
+                 PAGE FOOTER
+            =================================== -->
 
             <footer class="page-footer">
 
@@ -29,22 +35,31 @@
                 <br>
 
                 &copy; <?= date('Y') ?>
+
                 Altar Servers Management System
 
             </footer>
 
-        </div><!-- End application-content -->
 
-    </div><!-- End app-layout -->
+        </div><!-- END APPLICATION CONTENT -->
+
+    </div><!-- END APP LAYOUT -->
 
 
-    <!-- MAIN JAVASCRIPT -->
+    <!-- ======================================
+         MAIN JAVASCRIPT
+    ======================================= -->
 
     <script src="/assets/js/script.js"></script>
 
-    <!-- LOADING SCREEN JAVASCRIPT -->
+
+    <!-- ======================================
+         LOADING SCREEN JAVASCRIPT
+    ======================================= -->
 
     <script src="/assets/js/loading-screen.js"></script>
 
+
 </body>
+
 </html>

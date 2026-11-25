@@ -1,26 +1,33 @@
+
 <?php
 /*
 |--------------------------------------------------------------------------
-| ALTAR SERVERS WEB SYSTEM
+| AS-SYSTEM
 | SHARED PAGE HEADER
 | ST. FRANCIS XAVIER CATHEDRAL
-| Theme: Cathedral Navy, Gold, and Ivory
 |--------------------------------------------------------------------------
+|
+| Requirements:
+| - Authentication must be handled before including this file.
+| - Session must already be active.
+| - Each page should define $pageTitle and $activePage.
+|
 */
 
-// Session is managed by includes/auth.php.
-// Do not call session_start() here.
-
-// Default page information.
+// Default page information
 $pageTitle = $pageTitle ?? 'Dashboard';
 $activePage = $activePage ?? 'dashboard';
 
-// Administrator information.
+// Administrator information
 $adminName = $_SESSION['admin_name']
     ?? $_SESSION['username']
     ?? 'Administrator';
 
-$adminName = (string) $adminName;
+$adminName = trim((string) $adminName);
+
+if ($adminName === '') {
+    $adminName = 'Administrator';
+}
 
 $safeAdminName = htmlspecialchars(
     $adminName,
@@ -29,25 +36,13 @@ $safeAdminName = htmlspecialchars(
 );
 
 $adminInitial = strtoupper(
-    substr(trim($adminName), 0, 1)
+    substr($adminName, 0, 1)
 );
 
-if ($adminInitial === '') {
-    $adminInitial = 'A';
-}
-
-/*
-|--------------------------------------------------------------------------
-| LOADING SCREEN SESSION FLAG
-|--------------------------------------------------------------------------
-|
-| This flag is set after a successful login.
-| It is removed after the loading screen is included.
-| Normal navigation will not show the loading screen again.
-|
-*/
-
-$showLoadingScreen = !empty($_SESSION['show_loading_screen']);
+// Loading screen session flag
+$showLoadingScreen = !empty(
+    $_SESSION['show_loading_screen']
+);
 
 if ($showLoadingScreen) {
     unset($_SESSION['show_loading_screen']);
@@ -61,9 +56,15 @@ if ($showLoadingScreen) {
 
     <meta charset="UTF-8">
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-    <meta name="theme-color" content="#172C46">
+    <meta
+        name="theme-color"
+        content="#263C32"
+    >
 
     <meta
         name="description"
@@ -71,11 +72,18 @@ if ($showLoadingScreen) {
     >
 
     <title>
-        <?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?>
+        <?= htmlspecialchars(
+            $pageTitle,
+            ENT_QUOTES,
+            'UTF-8'
+        ) ?>
         | Altar Servers Management System
     </title>
 
-    <!-- GOOGLE FONTS -->
+
+    <!-- ======================================
+         GOOGLE FONTS
+    ======================================= -->
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
 
@@ -90,21 +98,30 @@ if ($showLoadingScreen) {
         rel="stylesheet"
     >
 
-    <!-- MAIN CSS -->
+
+    <!-- ======================================
+         MAIN STYLESHEET
+    ======================================= -->
 
     <link
         rel="stylesheet"
-        href="/assets/css/style.css"
+        href="/assets/css/style.css?v=2"
     >
 
-    <!-- LOADING SCREEN CSS -->
+
+    <!-- ======================================
+         LOADING SCREEN STYLESHEET
+    ======================================= -->
 
     <link
         rel="stylesheet"
-        href="/assets/css/loading-screen.css"
+        href="/assets/css/loading-screen.css?v=2"
     >
 
-    <!-- PRINT CSS -->
+
+    <!-- ======================================
+         PRINT STYLESHEET
+    ======================================= -->
 
     <?php if (!empty($usePrintStylesheet)): ?>
 
@@ -115,7 +132,10 @@ if ($showLoadingScreen) {
 
     <?php endif; ?>
 
-    <!-- OPTIONAL PAGE-SPECIFIC CSS -->
+
+    <!-- ======================================
+         OPTIONAL PAGE-SPECIFIC STYLESHEET
+    ======================================= -->
 
     <?php if (!empty($additionalStylesheet)): ?>
 
@@ -132,9 +152,13 @@ if ($showLoadingScreen) {
 
 </head>
 
-<body>
 
-    <!-- LOADING SCREEN -->
+<body class="admin-page">
+
+
+    <!-- ======================================
+         LOADING SCREEN
+    ======================================= -->
 
     <?php if ($showLoadingScreen): ?>
 
@@ -149,76 +173,121 @@ if ($showLoadingScreen) {
     <?php endif; ?>
 
 
-    <!-- MAIN APPLICATION LAYOUT -->
+    <!-- ======================================
+         MAIN APPLICATION LAYOUT
+    ======================================= -->
 
     <div class="app-layout">
 
+
         <!-- MOBILE SIDEBAR OVERLAY -->
 
-        <div class="sidebar-overlay"></div>
+        <div
+            class="sidebar-overlay"
+            id="sidebarOverlay"
+        ></div>
 
-        <!-- SIDEBAR -->
+
+        <!-- ==================================
+             SIDEBAR
+        =================================== -->
 
         <?php
 
         $sidebarFile = __DIR__ . '/sidebar.php';
 
-        if (file_exists($sidebarFile)) {
-            require_once $sidebarFile;
+        if (is_file($sidebarFile)) {
+
+            require $sidebarFile;
+
+        } else {
+
+            error_log(
+                'AS-SYSTEM ERROR: includes/sidebar.php was not found.'
+            );
+
         }
 
         ?>
 
-        <!-- MAIN APPLICATION CONTENT -->
+
+        <!-- ==================================
+             APPLICATION CONTENT
+        =================================== -->
 
         <div class="application-content">
 
-            <!-- TOP NAVIGATION BAR -->
+
+            <!-- ==================================
+                 TOP NAVIGATION BAR
+            =================================== -->
 
             <header class="topbar">
+
 
                 <!-- LEFT SIDE -->
 
                 <div class="topbar-left">
+
 
                     <!-- MOBILE MENU BUTTON -->
 
                     <button
                         type="button"
                         class="mobile-menu-button"
+                        id="mobileMenuButton"
                         aria-label="Open navigation menu"
                         aria-expanded="false"
+                        aria-controls="sidebar"
                     >
-                        ☰
+
+                        <span>☰</span>
+
                     </button>
+
 
                     <!-- CATHEDRAL INFORMATION -->
 
                     <div class="cathedral-heading">
 
                         <div class="topbar-title">
+
                             ST. FRANCIS XAVIER CATHEDRAL
+
                         </div>
 
                         <div class="topbar-subtitle">
+
                             Ministry of Altar Servers
+
                         </div>
 
                     </div>
 
                 </div>
 
-                <!-- ADMINISTRATOR PROFILE -->
+
+                <!-- ==================================
+                     ADMINISTRATOR PROFILE
+                =================================== -->
 
                 <div class="admin-profile">
 
+
+                    <!-- ADMIN AVATAR -->
+
                     <div class="admin-avatar">
+
                         <?= htmlspecialchars(
                             $adminInitial,
                             ENT_QUOTES,
                             'UTF-8'
                         ) ?>
+
                     </div>
+
+
+                    <!-- ADMIN INFORMATION -->
 
                     <div class="admin-information">
 
@@ -232,15 +301,23 @@ if ($showLoadingScreen) {
 
                     </div>
 
+
+                    <!-- LOGOUT -->
+
                     <a
                         href="/logout.php"
                         class="header-logout"
                     >
+
                         Logout
+
                     </a>
 
                 </div>
 
             </header>
 
-            <!-- PAGE CONTENT STARTS HERE -->
+
+            <!-- ==================================
+                 PAGE CONTENT STARTS HERE
+            =================================== -->
